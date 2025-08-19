@@ -19,9 +19,6 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 
-//jfdhsgjkadshfuiweyhfiuc  b   test
-
-//askjldaskldjaskldjasldjasld
 void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
