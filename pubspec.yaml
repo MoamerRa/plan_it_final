@@ -1,0 +1,50 @@
+name: planit_mt
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.5.4 <4.0.0'  # ← תיקון טווח תקין
+
+dependencies:
+  sqflite: ^2.3.0
+  path_provider: ^2.0.15
+  path: ^1.8.3
+  intl: ^0.18.1
+
+  flutter:
+    sdk: flutter
+  image_picker: ^1.0.4
+  fl_chart: ^0.64.0    
+  pie_chart: ^5.3.2
+  table_calendar: ^3.0.9
+
+  provider: ^6.1.1  # או הגרסה האחרונה
+  logger: ^2.0.2  # או הגרסה האחרונה
+  shared_preferences: ^2.2.0
+
+
+  # Firebase core + plugins
+  firebase_core: ^2.25.4
+  firebase_auth: ^4.17.4
+  cloud_firestore: ^4.9.1
+  firebase_storage: ^11.6.6
+
+  # UI + icons
+  cupertino_icons: ^1.0.8
+  lottie: ^2.7.0
+
+dev_dependencies:
+  flutter_test: 
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+  
+
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/

@@ -1,0 +1,55 @@
+plugins {
+    id "com.android.application"
+    id "com.google.gms.google-services"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "com.moamer.planit"
+    // עדכון גרסת ה-SDK כפי שהשגיאה ביקשה
+    compileSdk = 35 
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+   defaultConfig {
+
+    applicationId "com.moamer.planit"
+    minSdkVersion 21
+    targetSdkVersion 33
+    versionCode 1
+    versionName "1.0"
+    multiDexEnabled true 
+}
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+dependencies {
+  // הורדנו את גרסת ה-BOM לגרסה יציבה יותר כדי למנוע בעיות תאימות
+  implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
+
+  implementation("com.google.firebase:firebase-analytics")
+  implementation("com.google.firebase:firebase-auth")
+  implementation("com.google.firebase:firebase-firestore")
+  implementation("com.google.firebase:firebase-storage")
+}
+
+// ודא שהשורה הזו נמצאת בסוף הקובץ
+apply plugin: 'com.google.gms.google-services'
