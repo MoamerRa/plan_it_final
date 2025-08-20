@@ -37,7 +37,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       } catch (_) {
         // ignore malformed payloads
       }
-      // If vendor has a suggested date (not typical), you could also read it here
     }
   }
 
@@ -92,22 +91,18 @@ class _CreateEventPageState extends State<CreateEventPage> {
       return;
     }
 
-    // Optionally you could add vendorId into the event if your backend supports it.
-    // Kept minimal to avoid breaking EventProvider API.
     final error = await eventProvider.createNewEvent(
       title: _titleController.text.trim(),
       date: _selectedDate!,
       totalBudget: budget,
       userId: userId,
-      // You can extend EventProvider to accept vendorId if needed:
-      // vendorId: _selectedVendor?.vendorId,
     );
 
     if (!mounted) return;
 
     if (error == null) {
-      // Navigate to home (your original behavior) or to calendar/summary
-      Navigator.pushNamedAndRemoveUntil(context, '/userHome', (route) => false);
+      // MODIFIED: Pop with a result to notify the previous screen
+      Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Event created successfully!')),
       );

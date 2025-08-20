@@ -2,11 +2,15 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:planit_mt/models/booking_model.dart';
+import 'package:planit_mt/models/event_model.dart';
+import 'package:planit_mt/models/vendor/app_vendor.dart';
 import 'package:planit_mt/services/booking_service.dart';
+import 'package:planit_mt/services/firestore_service.dart';
 import 'package:planit_mt/utils/id_generator.dart';
 
 class BookingProvider with ChangeNotifier {
   final BookingService _bookingService = BookingService();
+  final FirestoreService _firestoreService = FirestoreService();
   StreamSubscription? _vendorBookingsSubscription;
   StreamSubscription? _userBookingsSubscription;
 
@@ -22,7 +26,7 @@ class BookingProvider with ChangeNotifier {
   String? _error;
   String? get error => _error;
 
-  // For User: Create a booking request
+  // For User: Create a booking request for a SINGLE vendor
   Future<bool> createBookingRequest({
     required String userId,
     required String vendorId,
@@ -35,7 +39,7 @@ class BookingProvider with ChangeNotifier {
     notifyListeners();
     try {
       final newBooking = BookingModel(
-        bookingId: generateUniqueId(), // Now this function is recognized
+        bookingId: generateUniqueId(),
         userId: userId,
         vendorId: vendorId,
         vendorName: vendorName,
@@ -52,6 +56,42 @@ class BookingProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _error = "Failed to create booking request: $e";
+      debugPrint(_error);
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // Create booking requests for a whole package of vendors
+  Future<bool> createBookingsForPackage({
+    required String userId,
+    required EventModel event,
+    required List<AppVendor> vendors,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      for (final vendor in vendors) {
+        final newBooking = BookingModel(
+          bookingId: generateUniqueId(),
+          userId: userId,
+          vendorId: vendor.vendorId,
+          vendorName: vendor.name,
+          eventId: event.id,
+          eventTitle: event.title,
+          bookingDate: event.date,
+          status: BookingStatus.pending,
+          createdAt: Timestamp.now(),
+        );
+        await _bookingService.createBookingRequest(newBooking);
+      }
+      _isLoading = false;
+      _error = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = "Failed to create package booking requests: $e";
       debugPrint(_error);
       _isLoading = false;
       notifyListeners();
@@ -97,11 +137,25 @@ class BookingProvider with ChangeNotifier {
     });
   }
 
-  // For Vendor: Update booking status
+  // For Vendor: Update booking status and update event budget if confirmed
   Future<void> updateBookingStatus(
       String bookingId, BookingStatus newStatus) async {
     try {
       await _bookingService.updateBookingStatus(bookingId, newStatus);
+
+      // If the booking is confirmed, update the event's spent budget
+      if (newStatus == BookingStatus.confirmed) {
+        final booking =
+            _vendorBookings.firstWhere((b) => b.bookingId == bookingId);
+        final vendor = await _firestoreService.getVendor(booking.vendorId);
+        if (vendor != null) {
+          await _firestoreService.updateEventSpentBudget(
+            userId: booking.userId,
+            eventId: booking.eventId,
+            amountToAdd: vendor.price,
+          );
+        }
+      }
     } catch (e) {
       _error = "Failed to update booking status: $e";
       debugPrint(_error);

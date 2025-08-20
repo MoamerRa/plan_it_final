@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:planit_mt/models/event_model.dart';
-import 'package:planit_mt/providers/booking_provider.dart';
 import 'package:planit_mt/providers/chat_provider.dart';
 import 'package:planit_mt/providers/event_provider.dart';
+import 'package:planit_mt/providers/package_provider.dart';
 import 'package:planit_mt/screens/vendor/chat_page.dart';
+import 'package:planit_mt/services/booking_service.dart';
 import 'package:planit_mt/widgets/vendor_details/vendor_contact.dart';
 import 'package:planit_mt/widgets/vendor_details/vendor_description.dart';
 import 'package:planit_mt/widgets/vendor_details/vendor_gallery.dart';
@@ -43,8 +43,6 @@ class VendorDetailsPage extends StatelessWidget {
     }
 
     final userId = context.watch<AuthProvider>().firebaseUser?.uid;
-    final EventModel? activeEvent = context.watch<EventProvider>().activeEvent;
-    final bookingProvider = context.watch<BookingProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFDF8),
@@ -76,8 +74,7 @@ class VendorDetailsPage extends StatelessWidget {
                 VendorContact(phone: vendor.phone, email: vendor.email),
                 const SizedBox(height: 24),
                 if (userId != null)
-                  _buildActionButtons(
-                      context, userId, vendor, activeEvent, bookingProvider)
+                  _buildActionButtons(context, userId, vendor)
                 else
                   const Center(
                     child:
@@ -92,98 +89,102 @@ class VendorDetailsPage extends StatelessWidget {
   }
 
   Widget _buildActionButtons(
-      BuildContext context,
-      String userId,
-      AppVendor vendor,
-      EventModel? activeEvent,
-      BookingProvider bookingProvider) {
-    return Center(
-      child: Column(
-        children: [
-          ElevatedButton.icon(
-            icon: bookingProvider.isLoading
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.calendar_today),
-            label: Text(
-              bookingProvider.isLoading ? 'Processing...' : 'Book Now',
-            ),
-            onPressed: (activeEvent == null || bookingProvider.isLoading)
-                ? null // Disable button if no active event or already loading
-                : () async {
-                    final success = await bookingProvider.createBookingRequest(
-                      userId: userId,
-                      vendorId: vendor.vendorId,
-                      vendorName: vendor.name,
-                      eventId: activeEvent.id,
-                      eventTitle: activeEvent.title,
-                      bookingDate: activeEvent.date,
-                    );
+      BuildContext context, String userId, AppVendor vendor) {
+    final packageProvider = context.watch<PackageProvider>();
+    final isAdded = packageProvider.isVendorInPackage(vendor);
+    final activeEvent = context.watch<EventProvider>().activeEvent;
 
-                    if (!context.mounted) return;
-
-                    if (success) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Booking request sent successfully!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(bookingProvider.error ??
-                              'Failed to send booking request.'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+    // If there's no active event, we can't check availability.
+    if (activeEvent == null) {
+      return Center(
+        child: Column(
+          children: [
+            const ElevatedButton(
+              onPressed: null,
+              child: Text('Create an Event to Add Vendor'),
             ),
+            const SizedBox(height: 16),
+            _buildMessageButton(context, userId, vendor),
+          ],
+        ),
+      );
+    }
+
+    return FutureBuilder<bool>(
+      future:
+          BookingService().isVendorAvailable(vendor.vendorId, activeEvent.date),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final isAvailable = snapshot.data ?? true; // Assume available on error
+
+        return Center(
+          child: Column(
+            children: [
+              ElevatedButton.icon(
+                icon: isAvailable
+                    ? Icon(isAdded ? Icons.check : Icons.add_shopping_cart)
+                    : const Icon(Icons.block),
+                label: Text(isAvailable
+                    ? (isAdded ? 'Added to Package' : 'Add to Package')
+                    : 'Booked on this date'),
+                onPressed: !isAvailable
+                    ? null
+                    : () {
+                        if (isAdded) {
+                          packageProvider.removeVendor(vendor);
+                        } else {
+                          packageProvider.addVendor(vendor);
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: !isAvailable
+                      ? Colors.red.shade300
+                      : (isAdded
+                          ? Colors.grey
+                          : Theme.of(context).primaryColor),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildMessageButton(context, userId, vendor),
+            ],
           ),
-          if (activeEvent == null)
-            const Padding(
-              padding: EdgeInsets.only(top: 8.0),
-              child: Text(
-                'You must create an event to book a vendor.',
-                style: TextStyle(color: Colors.red),
+        );
+      },
+    );
+  }
+
+  Widget _buildMessageButton(
+      BuildContext context, String userId, AppVendor vendor) {
+    return OutlinedButton.icon(
+      icon: const Icon(Icons.message_outlined),
+      label: const Text('Send Message'),
+      onPressed: () async {
+        try {
+          final chatProvider = context.read<ChatProvider>();
+          final chatRoomId =
+              await chatProvider.getOrCreateChatRoom(userId, vendor.vendorId);
+          if (!context.mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatPage(
+                chatRoomId: chatRoomId,
+                recipientName: vendor.name,
               ),
             ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.message_outlined),
-            label: const Text('Send Message'),
-            onPressed: () async {
-              try {
-                final chatProvider = context.read<ChatProvider>();
-                final chatRoomId = await chatProvider.getOrCreateChatRoom(
-                    userId, vendor.vendorId);
-                if (!context.mounted) return;
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChatPage(
-                      chatRoomId: chatRoomId,
-                      recipientName: vendor.name,
-                    ),
-                  ),
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to open chat: $e')),
-                );
-              }
-            },
-          ),
-        ],
-      ),
+          );
+        } catch (e) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to open chat: $e')),
+          );
+        }
+      },
     );
   }
 }

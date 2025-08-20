@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:planit_mt/models/booking_model.dart';
 import 'package:planit_mt/models/event_model.dart';
 import 'package:planit_mt/providers/auth_provider.dart';
+import 'package:planit_mt/providers/booking_provider.dart';
 import 'package:planit_mt/providers/event_provider.dart';
 import 'package:planit_mt/widgets/navButton.dart';
 import 'package:planit_mt/widgets/overview_box.dart';
@@ -9,12 +11,30 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/user_provider.dart';
 
-class UserHomeScreen extends StatelessWidget {
+class UserHomeScreen extends StatefulWidget {
   const UserHomeScreen({super.key});
 
   @override
+  State<UserHomeScreen> createState() => _UserHomeScreenState();
+}
+
+class _UserHomeScreenState extends State<UserHomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Fetch initial data when the screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = context.read<AuthProvider>().firebaseUser;
+      if (user != null) {
+        // Load the user's event and their bookings
+        context.read<EventProvider>().loadUserEvent(user.uid);
+        context.read<BookingProvider>().fetchUserBookings(user.uid);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Get user and event data from providers
     final user = context.watch<UserProvider>().user;
     final eventProvider = context.watch<EventProvider>();
     final activeEvent = eventProvider.activeEvent;
@@ -24,12 +44,10 @@ class UserHomeScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        // This line removes the back arrow
         automaticallyImplyLeading: false,
         title: const Text('Home',
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         actions: [
-          // The "Switch to Vendor" button has been removed from here
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.black),
             onPressed: () async {
@@ -66,6 +84,8 @@ class UserHomeScreen extends StatelessWidget {
                       route: '/recommend',
                       title: "Get Event Package Recommendations",
                       icon: Icons.auto_awesome_outlined),
+                  const SizedBox(height: 24),
+                  _buildBookedVendors(context), // New widget
                   const SizedBox(height: 24),
                   const Text('Explore by Category:',
                       style:
@@ -115,10 +135,14 @@ class UserHomeScreen extends StatelessWidget {
   }
 
   Widget _buildEventOverview(BuildContext context, EventModel? event) {
-    if (context.watch<EventProvider>().isLoading) {
+    // Listen to EventProvider for live updates
+    final eventProvider = context.watch<EventProvider>();
+    final liveEvent = eventProvider.activeEvent;
+
+    if (eventProvider.isLoading) {
       return _buildOverviewSkeletons();
     }
-    if (event == null) {
+    if (liveEvent == null) {
       return const Center(
           child: Padding(
         padding: EdgeInsets.all(16.0),
@@ -127,31 +151,32 @@ class UserHomeScreen extends StatelessWidget {
       ));
     }
 
-    final daysLeft = event.date.difference(DateTime.now()).inDays;
-    final budgetSpentPercent = event.totalBudget > 0
-        ? (event.spentBudget / event.totalBudget * 100).toStringAsFixed(0)
+    final daysLeft = liveEvent.date.difference(DateTime.now()).inDays;
+    final budgetSpentPercent = liveEvent.totalBudget > 0
+        ? (liveEvent.spentBudget / liveEvent.totalBudget * 100)
+            .toStringAsFixed(0)
         : "0";
-    final totalGuests = event.totalGuests;
+    final totalGuests = liveEvent.totalGuests;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         OverviewBox(
-          title: event.title,
+          title: liveEvent.title,
           main: '$daysLeft Days',
-          sub: DateFormat('dd/MM/yyyy').format(event.date),
+          sub: DateFormat('dd/MM/yyyy').format(liveEvent.date),
           icon: Icons.event,
         ),
         OverviewBox(
           title: 'Budget',
           main: '$budgetSpentPercent% Spent',
           sub:
-              '${event.spentBudget.toStringAsFixed(0)} of ${event.totalBudget.toStringAsFixed(0)}₪',
+              '${liveEvent.spentBudget.toStringAsFixed(0)} of ${liveEvent.totalBudget.toStringAsFixed(0)}₪',
           icon: Icons.attach_money,
         ),
         OverviewBox(
           title: 'Guests',
-          main: '${event.confirmedGuests} Confirmed',
+          main: '${liveEvent.confirmedGuests} Confirmed',
           sub: 'Total: $totalGuests',
           icon: Icons.people,
         ),
@@ -172,6 +197,73 @@ class UserHomeScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
               )),
+    );
+  }
+
+  /// A new widget to display confirmed vendors on the home screen.
+  Widget _buildBookedVendors(BuildContext context) {
+    final bookingProvider = context.watch<BookingProvider>();
+    final confirmedBookings = bookingProvider.userBookings
+        .where((b) => b.status == BookingStatus.confirmed)
+        .toList();
+
+    if (bookingProvider.isLoading && confirmedBookings.isEmpty) {
+      return const SizedBox.shrink(); // Don't show a loader here, keep it clean
+    }
+
+    if (confirmedBookings.isEmpty) {
+      return const SizedBox
+          .shrink(); // Don't show anything if no vendors are booked
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('My Booked Vendors:',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: confirmedBookings.length,
+            itemBuilder: (context, index) {
+              final booking = confirmedBookings[index];
+              return Container(
+                width: 150,
+                margin: const EdgeInsets.only(right: 10),
+                child: Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.store, color: Colors.green, size: 30),
+                        const SizedBox(height: 8),
+                        Text(
+                          booking.vendorName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          booking.eventTitle,
+                          style:
+                              const TextStyle(fontSize: 12, color: Colors.grey),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

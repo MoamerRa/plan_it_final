@@ -7,6 +7,7 @@ import 'package:planit_mt/providers/chat_provider.dart';
 import 'package:planit_mt/providers/event_provider.dart';
 import 'package:planit_mt/providers/expense_provider.dart';
 import 'package:planit_mt/providers/guest_provider.dart';
+import 'package:planit_mt/providers/package_provider.dart';
 import 'package:planit_mt/providers/post_provider.dart';
 import 'package:planit_mt/providers/recommendationprovider.dart';
 import 'package:planit_mt/providers/report_provider.dart';
@@ -60,6 +61,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProvider(create: (_) => GuestProvider()),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
+        ChangeNotifierProvider(create: (_) => PackageProvider()),
       ],
       child: MaterialApp(
         title: 'PlanIt App',

@@ -12,6 +12,7 @@ import 'package:planit_mt/screens/user/explore_vendors_page.dart';
 import 'package:planit_mt/screens/user/budget.dart';
 import 'package:planit_mt/screens/user/full_calendar_page.dart';
 import 'package:planit_mt/screens/user/main_user_shell.dart';
+import 'package:planit_mt/screens/user/package_builder_page.dart';
 import 'package:planit_mt/screens/user/plan_event.dart';
 import 'package:planit_mt/screens/user/recommended_packages_page.dart';
 import 'package:planit_mt/screens/user/task_screen.dart';
@@ -40,7 +41,8 @@ class AppRoutes {
         '/budget': (context) => const BudgetBreakdownPage(),
         '/calendar': (context) => const FullCalendarPage(),
         '/createEvent': (context) => const CreateEventPage(),
-        '/tasks': (context) => const TaskScreen(), // Add the new route
+        '/tasks': (context) => const TaskScreen(),
+        '/packageBuilder': (context) => const PackageBuilderPage(),
 
         '/vendordetails': (context) => const VendorDetailsPage(),
         //Vendor

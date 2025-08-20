@@ -29,17 +29,23 @@ class ExpenseProvider with ChangeNotifier {
     await fetchExpenses(userId, eventId); // Refresh list
     // Update the total spent on the main event document
     await _firestoreService.updateEventSpentBudget(
-        userId, eventId, totalSpent);
+        userId: userId, eventId: eventId, amountToAdd: expense.amount);
   }
 
   Future<void> deleteExpense(
       String userId, String eventId, String expenseId) async {
     _isLoading = true;
     notifyListeners();
+
+    // Find the expense to get its amount before deleting
+    final expenseToDelete = _expenses.firstWhere((exp) => exp.id == expenseId);
+    final amountToDelete = expenseToDelete.amount;
+
     await _firestoreService.deleteExpense(userId, eventId, expenseId);
     await fetchExpenses(userId, eventId); // Refresh list
-    // Update the total spent on the main event document
+
+    // Update the total spent on the main event document by subtracting the amount
     await _firestoreService.updateEventSpentBudget(
-        userId, eventId, totalSpent);
+        userId: userId, eventId: eventId, amountToAdd: -amountToDelete);
   }
 }

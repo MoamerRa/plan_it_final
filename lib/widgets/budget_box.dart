@@ -1,66 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:planit_mt/widgets/legend_dot.dart';
 
-// 1. הפכנו ל-StatefulWidget
-class BudgetBox extends StatefulWidget {
+// MODIFIED: Converted to a StatelessWidget that accepts data
+class BudgetBox extends StatelessWidget {
+  final double totalBudget;
+  final double spentBudget;
   final VoidCallback onTap;
 
-  const BudgetBox({super.key, required this.onTap});
-
-  @override
-  State<BudgetBox> createState() => _BudgetBoxState();
-}
-
-class _BudgetBoxState extends State<BudgetBox> {
-  // משתני מצב לניהול התקציב
-  double _estimatedCost = 170000;
-  final double _finalCost = 210000;
-  final double _paidAmount = 65000;
-
-  void _showEditBudgetDialog() {
-    final controller =
-        TextEditingController(text: _estimatedCost.toStringAsFixed(0));
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Edit Estimated Budget"),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: "Amount (₪)",
-              prefixText: "₪",
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final newAmount = double.tryParse(controller.text);
-                if (newAmount != null) {
-                  setState(() {
-                    _estimatedCost = newAmount;
-                  });
-                }
-                Navigator.pop(context);
-              },
-              child: const Text("Save"),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  const BudgetBox({
+    super.key,
+    required this.totalBudget,
+    required this.spentBudget,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // חישוב האחוזים
-    final paidPercent = _paidAmount / _finalCost;
-    final estimatedPercent = _estimatedCost / _finalCost;
+    final remainingBudget = totalBudget - spentBudget;
+    final spentPercent = totalBudget > 0 ? spentBudget / totalBudget : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -87,7 +44,7 @@ class _BudgetBoxState extends State<BudgetBox> {
                       fontSize: 18,
                       color: Color(0xFF1E2742))),
               TextButton(
-                onPressed: widget.onTap,
+                onPressed: onTap,
                 child: const Text('View More >',
                     style: TextStyle(color: Colors.redAccent)),
               )
@@ -100,68 +57,49 @@ class _BudgetBoxState extends State<BudgetBox> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Estimated Cost',
+                  const Text('Total Budget',
                       style: TextStyle(
                           fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 4),
-                  Text('${_estimatedCost.toStringAsFixed(0)} ₪',
+                  Text('${totalBudget.toStringAsFixed(0)} ₪',
                       style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFFD5B04C))),
-                  // 2. כפתור העריכה
-                  GestureDetector(
-                    onTap: _showEditBudgetDialog,
-                    child: const Text('Edit',
-                        style: TextStyle(
-                            color: Colors.purple,
-                            decoration: TextDecoration.underline)),
-                  )
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Final Cost',
+                  const Text('Spent',
                       style: TextStyle(
                           fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 4),
-                  Text('${_finalCost.toStringAsFixed(0)} ₪',
+                  Text('${spentBudget.toStringAsFixed(0)} ₪',
                       style: const TextStyle(
-                          fontSize: 20,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFFD5B04C))),
-                  Text('Paid - ${_paidAmount.toStringAsFixed(0)} ₪'),
-                  Text(
-                      'Pending - ${(_finalCost - _paidAmount).toStringAsFixed(0)} ₪')
+                          color: Color(0xFF941B2E))),
+                  Text('Remaining - ${remainingBudget.toStringAsFixed(0)} ₪'),
                 ],
               )
             ],
           ),
           const SizedBox(height: 16),
-          // 3. הבר האנימטיבי
+          // Animated progress bar
           Container(
             height: 10,
-            clipBehavior: Clip.hardEdge, // חשוב לפינות מעוגלות
+            clipBehavior: Clip.hardEdge,
             decoration: BoxDecoration(
               color: Colors.grey.shade200,
               borderRadius: BorderRadius.circular(5),
             ),
             child: Stack(
               children: [
-                // בר התקציב המוערך
+                // The bar representing the spent amount
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 500),
-                  width: MediaQuery.of(context).size.width * estimatedPercent,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD5B04C),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                ),
-                // בר התשלום
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
-                  width: MediaQuery.of(context).size.width * paidPercent,
+                  width: MediaQuery.of(context).size.width * spentPercent,
                   decoration: BoxDecoration(
                     color: const Color(0xFF941B2E),
                     borderRadius: BorderRadius.circular(5),
@@ -174,8 +112,7 @@ class _BudgetBoxState extends State<BudgetBox> {
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              LegendDot(color: Color(0xFF941B2E), text: 'Paid'),
-              LegendDot(color: Color(0xFFD5B04C), text: 'Estimated'),
+              LegendDot(color: Color(0xFF941B2E), text: 'Spent'),
               LegendDot(color: Color(0xFFE0E0E0), text: 'Remaining'),
             ],
           ),

@@ -152,14 +152,17 @@ class FirestoreService {
         .delete();
   }
 
+  // MODIFIED: Now increments the budget instead of setting it
   Future<void> updateEventSpentBudget(
-      String userId, String eventId, double newTotal) async {
+      {required String userId,
+      required String eventId,
+      required double amountToAdd}) async {
     await _db
         .collection('users')
         .doc(userId)
         .collection('events')
         .doc(eventId)
-        .update({'spentBudget': newTotal});
+        .update({'spentBudget': FieldValue.increment(amountToAdd)});
   }
 
   // --- Guest Management ---

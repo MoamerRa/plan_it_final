@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:planit_mt/models/booking_model.dart';
+import 'package:planit_mt/providers/booking_provider.dart';
+import 'package:planit_mt/providers/event_provider.dart';
+import 'package:planit_mt/screens/user/plan_event.dart';
 import 'package:provider/provider.dart';
 import '../../models/user/user_model.dart';
 import '../../providers/auth_provider.dart';
@@ -9,15 +13,11 @@ class UserProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ================== התיקון כאן ==================
-    // We get the user model from the UserProvider.
     final userProvider = context.watch<UserProvider>();
     final user = userProvider.user;
-    // ===============================================
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
-      // If the user data is not yet available, show a loading indicator.
       body: user == null
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
@@ -38,7 +38,7 @@ class UserProfilePage extends StatelessWidget {
       flexibleSpace: FlexibleSpaceBar(
         centerTitle: true,
         title: Text(
-          user.name, // Display real name
+          user.name,
           style: const TextStyle(color: Colors.black, fontSize: 16.0),
         ),
         background: Container(
@@ -60,7 +60,7 @@ class UserProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  user.name, // Display real name
+                  user.name,
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -69,7 +69,7 @@ class UserProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  user.email, // Display real email
+                  user.email,
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.grey[700],
@@ -84,6 +84,36 @@ class UserProfilePage extends StatelessWidget {
   }
 
   Widget _buildBody(BuildContext context, UserModel user) {
+    final eventProvider = context.watch<EventProvider>();
+    final bookingProvider = context.watch<BookingProvider>();
+    final activeEvent = eventProvider.activeEvent;
+
+    // Calculate stats
+    final eventsCount = activeEvent != null ? '1' : '0';
+    final vendorsBookedCount = bookingProvider.userBookings
+        .where((b) => b.status == BookingStatus.confirmed)
+        .length
+        .toString();
+    final guestsInvitedCount = activeEvent?.totalGuests.toString() ?? '0';
+
+    // Calculate completed tasks from checklist
+    final confirmedVendorCategories = bookingProvider.userBookings
+        .where((b) => b.status == BookingStatus.confirmed)
+        .map((b) {
+      if (b.vendorName.toLowerCase().contains("hall")) return "Hall";
+      if (b.vendorName.toLowerCase().contains("dj")) return "DJ";
+      if (b.vendorName.toLowerCase().contains("catering")) return "Catering";
+      if (b.vendorName.toLowerCase().contains("photo")) return "Photography";
+      return "Other";
+    }).toSet();
+    int completedTasks = 0;
+    for (var category in confirmedVendorCategories) {
+      if (PlanEvent.checklistItems.containsKey(category)) {
+        completedTasks++;
+      }
+    }
+    final tasksDoneCount = completedTasks.toString();
+
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -95,38 +125,30 @@ class UserProfilePage extends StatelessWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            // These stats are still dummy data and can be connected later
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 1.5,
-              children: [
-                _buildStatCard('Events', '3', Icons.celebration, Colors.orange),
-                _buildStatCard(
-                    'Vendors Booked', '12', Icons.store, Colors.blue),
-                _buildStatCard(
-                    'Tasks Done', '27', Icons.check_circle, Colors.green),
-                _buildStatCard(
-                    'Guests Invited', '450', Icons.people, Colors.purple),
-              ],
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Column(
+                  children: [
+                    _buildStatTile('Events', eventsCount, Icons.celebration,
+                        Colors.orange),
+                    const Divider(indent: 16, endIndent: 16),
+                    _buildStatTile('Vendors Booked', vendorsBookedCount,
+                        Icons.store, Colors.blue),
+                    const Divider(indent: 16, endIndent: 16),
+                    _buildStatTile('Tasks Done', tasksDoneCount,
+                        Icons.check_circle, Colors.green),
+                    const Divider(indent: 16, endIndent: 16),
+                    _buildStatTile('Guests Invited', guestsInvitedCount,
+                        Icons.people, Colors.purple),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 16),
-            const Text(
-              'Settings',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _buildSettingsTile(context, 'Edit Profile', Icons.edit_outlined),
-            _buildSettingsTile(
-                context, 'Notifications', Icons.notifications_outlined),
-            _buildSettingsTile(context, 'Security', Icons.security_outlined),
-            _buildSettingsTile(context, 'Help & Support', Icons.help_outline),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             Center(
               child: ElevatedButton.icon(
                 onPressed: () async {
@@ -152,53 +174,18 @@ class UserProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildStatCard(
+  Widget _buildStatTile(
       String title, String value, IconData icon, Color color) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
+    return ListTile(
+      leading: Icon(icon, color: color, size: 30),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+      trailing: Text(
+        value,
+        style: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+          color: color,
         ),
-      ),
-    );
-  }
-
-  Widget _buildSettingsTile(BuildContext context, String title, IconData icon) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.grey[800]),
-        title: Text(title),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {
-          // Action to be performed on tap
-        },
       ),
     );
   }
