@@ -1,5 +1,3 @@
-
-// The EventModel is now upgraded to handle all aspects of a user's event.
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EventModel {
@@ -55,5 +53,30 @@ class EventModel {
       'pendingGuests': pendingGuests,
       'declinedGuests': declinedGuests,
     };
+  }
+
+  // NEW: Helper method to create a copy of the event with modified fields
+  EventModel copyWith({
+    String? id,
+    String? userId,
+    String? title,
+    DateTime? date,
+    double? totalBudget,
+    double? spentBudget,
+    int? confirmedGuests,
+    int? pendingGuests,
+    int? declinedGuests,
+  }) {
+    return EventModel(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      title: title ?? this.title,
+      date: date ?? this.date,
+      totalBudget: totalBudget ?? this.totalBudget,
+      spentBudget: spentBudget ?? this.spentBudget,
+      confirmedGuests: confirmedGuests ?? this.confirmedGuests,
+      pendingGuests: pendingGuests ?? this.pendingGuests,
+      declinedGuests: declinedGuests ?? this.declinedGuests,
+    );
   }
 }

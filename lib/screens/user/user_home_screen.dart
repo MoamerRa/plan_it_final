@@ -4,6 +4,7 @@ import 'package:planit_mt/models/event_model.dart';
 import 'package:planit_mt/providers/auth_provider.dart';
 import 'package:planit_mt/providers/booking_provider.dart';
 import 'package:planit_mt/providers/event_provider.dart';
+import 'package:planit_mt/providers/task_provider.dart';
 import 'package:planit_mt/widgets/navButton.dart';
 import 'package:planit_mt/widgets/overview_box.dart';
 import 'package:planit_mt/widgets/vendor/vendor_list.dart';
@@ -22,15 +23,69 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch initial data when the screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = context.read<AuthProvider>().firebaseUser;
-      if (user != null) {
-        // Load the user's event and their bookings
-        context.read<EventProvider>().loadUserEvent(user.uid);
-        context.read<BookingProvider>().fetchUserBookings(user.uid);
-      }
+      _loadInitialData();
     });
+  }
+
+  Future<void> _loadInitialData() async {
+    if (!mounted) return;
+    await _refreshData(); // Use the refresh method for initial load
+  }
+
+  // ================== FIX FOR ISSUE #1 (Part 1) ==================
+  // This method will be used for both initial load and pull-to-refresh.
+  Future<void> _refreshData() async {
+    if (!mounted) return;
+
+    final authProvider = context.read<AuthProvider>();
+    final eventProvider = context.read<EventProvider>();
+    final bookingProvider = context.read<BookingProvider>();
+    final taskProvider = context.read<TaskProvider>();
+
+    final user = authProvider.firebaseUser;
+    if (user != null) {
+      // Fetch all data sources concurrently for faster loading.
+      await Future.wait([
+        Future.microtask(() => eventProvider.listenToUserEvent(user.uid)),
+        Future.microtask(() => bookingProvider.fetchUserBookings(user.uid)),
+        Future.microtask(() => taskProvider.fetchTasks()),
+      ]);
+
+      // A short delay to allow the listener to get the first event
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (mounted && eventProvider.activeEvent == null) {
+        _showCreateEventDialog();
+      }
+    }
+  }
+  // ================================================================
+
+  void _showCreateEventDialog() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text("Welcome to PlanIt!"),
+          content: const Text(
+              "To start planning and exploring vendors, you need to create an event first."),
+          actions: <Widget>[
+            TextButton(
+              child: const Text("Create Event"),
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                // No need to check result, the stream will update the UI.
+                await Navigator.pushNamed(context, '/createEvent');
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -61,40 +116,49 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       ),
       body: user == null
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _headerSection(user.name),
-                  const SizedBox(height: 20),
-                  _buildEventOverview(context, activeEvent),
-                  const SizedBox(height: 24),
-                  const NavButton(
-                      route: '/userplan',
-                      title: "Let's Plan An Event",
-                      icon: Icons.calendar_today_outlined),
-                  const SizedBox(height: 16),
-                  const NavButton(
-                      route: '/community',
-                      title: "Posts from Vendors!",
-                      icon: Icons.image_outlined),
-                  const SizedBox(height: 16),
-                  const NavButton(
-                      route: '/recommend',
-                      title: "Get Event Package Recommendations",
-                      icon: Icons.auto_awesome_outlined),
-                  const SizedBox(height: 24),
-                  _buildBookedVendors(context), // New widget
-                  const SizedBox(height: 24),
-                  const Text('Explore by Category:',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  const VendorList(),
-                ],
+          // ================== FIX FOR ISSUE #1 (Part 2) ==================
+          // Wrap the body with RefreshIndicator.
+          : RefreshIndicator(
+              onRefresh: _refreshData,
+              child: SingleChildScrollView(
+                physics:
+                    const AlwaysScrollableScrollPhysics(), // Important for refresh
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _headerSection(user.name),
+                    const SizedBox(height: 20),
+                    _buildEventOverview(context, activeEvent),
+                    const SizedBox(height: 24),
+                    const NavButton(
+                        route: '/userplan',
+                        title: "Let's Plan An Event",
+                        icon: Icons.calendar_today_outlined),
+                    const SizedBox(height: 16),
+                    const NavButton(
+                        route: '/community',
+                        title: "Posts from Vendors!",
+                        icon: Icons.image_outlined),
+                    const SizedBox(height: 16),
+                    const NavButton(
+                        route: '/recommend',
+                        title: "Get Event Package Recommendations",
+                        icon: Icons.auto_awesome_outlined),
+                    const SizedBox(height: 24),
+                    _buildBookedVendors(context),
+                    const SizedBox(height: 24),
+                    const Text('Explore by Category:',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    const VendorList(),
+                  ],
+                ),
               ),
             ),
+      // ================================================================
     );
   }
 
@@ -135,11 +199,14 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   Widget _buildEventOverview(BuildContext context, EventModel? event) {
-    // Listen to EventProvider for live updates
+    // ================== FIX FOR ISSUE #1 (Part 3) ==================
+    // Ensure we are WATCHING the providers here so the UI rebuilds on change.
     final eventProvider = context.watch<EventProvider>();
+    final taskProvider = context.watch<TaskProvider>();
+    // ================================================================
     final liveEvent = eventProvider.activeEvent;
 
-    if (eventProvider.isLoading) {
+    if (eventProvider.isLoading && liveEvent == null) {
       return _buildOverviewSkeletons();
     }
     if (liveEvent == null) {
@@ -156,7 +223,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         ? (liveEvent.spentBudget / liveEvent.totalBudget * 100)
             .toStringAsFixed(0)
         : "0";
-    final totalGuests = liveEvent.totalGuests;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -175,10 +241,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           icon: Icons.attach_money,
         ),
         OverviewBox(
-          title: 'Guests',
-          main: '${liveEvent.confirmedGuests} Confirmed',
-          sub: 'Total: $totalGuests',
-          icon: Icons.people,
+          title: 'Tasks',
+          main: '${taskProvider.completedTasks} Done',
+          sub: 'Total: ${taskProvider.totalTasks}',
+          icon: Icons.check_circle_outline,
         ),
       ],
     );
@@ -200,7 +266,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  /// A new widget to display confirmed vendors on the home screen.
   Widget _buildBookedVendors(BuildContext context) {
     final bookingProvider = context.watch<BookingProvider>();
     final confirmedBookings = bookingProvider.userBookings
@@ -208,12 +273,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         .toList();
 
     if (bookingProvider.isLoading && confirmedBookings.isEmpty) {
-      return const SizedBox.shrink(); // Don't show a loader here, keep it clean
+      return const SizedBox.shrink();
     }
 
     if (confirmedBookings.isEmpty) {
-      return const SizedBox
-          .shrink(); // Don't show anything if no vendors are booked
+      return const SizedBox.shrink();
     }
 
     return Column(

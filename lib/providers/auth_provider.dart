@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:planit_mt/services/sqlite_helper.dart';
 import '../models/admin/app_admin.dart';
 import '../models/user/user_model.dart';
 import '../models/vendor/app_vendor.dart';
@@ -107,13 +108,14 @@ class AuthProvider with ChangeNotifier {
     return await _authService.signIn(email: email, password: password);
   }
 
+  // ================== FIX FOR ISSUE #2 (Part 2) ==================
   Future<void> signOut() async {
     await _authService.signOut();
+    // Clear local tasks to prevent data leakage between users on the same device.
+    await SQLiteHelper.clearAllTasks();
   }
+  // ================================================================
 
-  // ================== FUNCTION ADDED HERE ==================
-  /// Sends a password reset email to the given address.
-  /// Returns null on success, or an error message string on failure.
   Future<String?> resetPassword({required String email}) async {
     try {
       await _authService.sendPasswordResetEmail(email: email);
@@ -130,7 +132,6 @@ class AuthProvider with ChangeNotifier {
       return 'An unexpected error occurred.';
     }
   }
-  // =========================================================
 
   void setUserModel(UserModel user) {
     _userModel = user;

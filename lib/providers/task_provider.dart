@@ -14,7 +14,6 @@ class TaskProvider extends ChangeNotifier {
   List<Task> get incompleteTasks =>
       _tasks.where((task) => !task.isCompleted).toList();
 
-  // Constructor is now empty to implement lazy loading.
   TaskProvider();
 
   /// Fetches all tasks from the local SQLite database.
@@ -46,4 +45,13 @@ class TaskProvider extends ChangeNotifier {
     await SQLiteHelper.deleteTask(id);
     await fetchTasks(); // Refresh the list
   }
+
+  // ================== FIX FOR ISSUE #2 (Part 3) ==================
+  /// Clears the tasks from the provider's state.
+  /// This should be called along with clearing the database on logout.
+  void clearTasks() {
+    _tasks = [];
+    notifyListeners();
+  }
+  // ================================================================
 }

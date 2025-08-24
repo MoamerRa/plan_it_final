@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:planit_mt/models/booking_model.dart';
 import 'package:planit_mt/providers/booking_provider.dart';
 import 'package:planit_mt/providers/event_provider.dart';
+import 'package:planit_mt/providers/task_provider.dart';
 import 'package:planit_mt/screens/user/plan_event.dart';
 import 'package:provider/provider.dart';
 import '../../models/user/user_model.dart';
@@ -86,6 +87,7 @@ class UserProfilePage extends StatelessWidget {
   Widget _buildBody(BuildContext context, UserModel user) {
     final eventProvider = context.watch<EventProvider>();
     final bookingProvider = context.watch<BookingProvider>();
+    final taskProvider = context.watch<TaskProvider>(); // Get TaskProvider
     final activeEvent = eventProvider.activeEvent;
 
     // Calculate stats
@@ -94,7 +96,7 @@ class UserProfilePage extends StatelessWidget {
         .where((b) => b.status == BookingStatus.confirmed)
         .length
         .toString();
-    final guestsInvitedCount = activeEvent?.totalGuests.toString() ?? '0';
+    final totalTasksCount = taskProvider.totalTasks.toString(); // Use task data
 
     // Calculate completed tasks from checklist
     final confirmedVendorCategories = bookingProvider.userBookings
@@ -106,13 +108,13 @@ class UserProfilePage extends StatelessWidget {
       if (b.vendorName.toLowerCase().contains("photo")) return "Photography";
       return "Other";
     }).toSet();
-    int completedTasks = 0;
+    int completedChecklistTasks = 0;
     for (var category in confirmedVendorCategories) {
       if (PlanEvent.checklistItems.containsKey(category)) {
-        completedTasks++;
+        completedChecklistTasks++;
       }
     }
-    final tasksDoneCount = completedTasks.toString();
+    final checklistTasksDoneCount = completedChecklistTasks.toString();
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -139,11 +141,12 @@ class UserProfilePage extends StatelessWidget {
                     _buildStatTile('Vendors Booked', vendorsBookedCount,
                         Icons.store, Colors.blue),
                     const Divider(indent: 16, endIndent: 16),
-                    _buildStatTile('Tasks Done', tasksDoneCount,
+                    _buildStatTile('Checklist Done', checklistTasksDoneCount,
                         Icons.check_circle, Colors.green),
                     const Divider(indent: 16, endIndent: 16),
-                    _buildStatTile('Guests Invited', guestsInvitedCount,
-                        Icons.people, Colors.purple),
+                    // REPLACED GUESTS WITH TASKS
+                    _buildStatTile('Total Tasks', totalTasksCount,
+                        Icons.list_alt, Colors.purple),
                   ],
                 ),
               ),

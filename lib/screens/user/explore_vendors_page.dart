@@ -33,7 +33,6 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // We must have an event to check availability, so we fetch vendors after checking for an event.
       final activeEvent = context.read<EventProvider>().activeEvent;
       if (activeEvent != null) {
         context.read<VendorProvider>().fetchApprovedVendors();
@@ -49,15 +48,13 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
   }
 
   Future<void> _refresh() async {
-    // When refreshing, we need to re-fetch vendors AND their availability
     await context.read<VendorProvider>().fetchApprovedVendors();
     await _checkVendorAvailability();
   }
 
-  /// Checks which vendors are already booked on the user's active event date.
   Future<void> _checkVendorAvailability() async {
     final activeEvent = context.read<EventProvider>().activeEvent;
-    if (activeEvent == null) return; // No date to check against
+    if (activeEvent == null) return;
 
     final bookingService = BookingService();
     final confirmedBookings =
@@ -92,9 +89,25 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
     final filteredVendors = _filterVendors(allVendors);
     final packageProvider = context.watch<PackageProvider>();
 
-    // NEW: Show a prompt if no event is created yet.
     if (eventProvider.activeEvent == null) {
-      return _buildCreateEventPrompt(context);
+      return Scaffold(
+        appBar: AppBar(title: const Text('Explore Vendors')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text("Something went wrong. No event date found."),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Go Back'),
+              )
+            ],
+          ),
+        ),
+      );
     }
 
     return Scaffold(
@@ -103,6 +116,7 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
+        automaticallyImplyLeading: false,
         title: const Text(
           'Explore Vendors',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
@@ -133,49 +147,6 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
           label: Text('${packageProvider.selectedVendors.length}'),
           isLabelVisible: packageProvider.selectedVendors.isNotEmpty,
           child: const Icon(Icons.shopping_basket_outlined),
-        ),
-      ),
-    );
-  }
-
-  // NEW WIDGET
-  Widget _buildCreateEventPrompt(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Explore Vendors')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.calendar_month, size: 80, color: Colors.grey),
-              const SizedBox(height: 16),
-              const Text(
-                'First, let\'s set up your event!',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'You need to choose a date for your event before you can see available vendors.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () async {
-                  // Navigate to create event page and wait for a result
-                  final eventCreated =
-                      await Navigator.pushNamed(context, '/createEvent');
-                  // If an event was created, reload the data on this page
-                  if (eventCreated == true && mounted) {
-                    _refresh();
-                  }
-                },
-                child: const Text('Create Your Event'),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -273,7 +244,7 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
   }
 
   Widget _buildVendorCard(BuildContext context, AppVendor vendor) {
-    final packageProvider = context.read<PackageProvider>();
+    final packageProvider = context.watch<PackageProvider>();
     final isAdded = packageProvider.isVendorInPackage(vendor);
     final isUnavailable = _unavailableVendorIds.contains(vendor.vendorId);
     final imageUrl = vendor.imageUrl.isNotEmpty
@@ -330,28 +301,30 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
                       ],
                     ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: isUnavailable
-                        ? null
-                        : () {
-                            if (isAdded) {
-                              packageProvider.removeVendor(vendor);
-                            } else {
-                              packageProvider.addVendor(vendor);
-                            }
-                          },
-                    icon: Icon(isUnavailable
-                        ? Icons.block
-                        : (isAdded ? Icons.check : Icons.add_shopping_cart)),
-                    label: Text(
-                        isUnavailable ? 'Booked' : (isAdded ? 'Added' : 'Add')),
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: isUnavailable
-                            ? Colors.red.shade300
-                            : (isAdded
-                                ? Colors.grey
-                                : const Color(0xFFBFA054))),
-                  ),
+                  // --- FIX: Logic to handle all button states ---
+                  if (isUnavailable)
+                    const ElevatedButton(
+                      onPressed: null,
+                      child: Text('Booked'),
+                    )
+                  else if (isAdded)
+                    ElevatedButton(
+                      onPressed: null,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey),
+                      child: const Text('Added'),
+                    )
+                  else
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        packageProvider.addVendor(vendor);
+                        Navigator.pushNamed(context, '/packageBuilder');
+                      },
+                      icon: const Icon(Icons.add_shopping_cart),
+                      label: const Text('Add'),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFBFA054)),
+                    ),
                 ],
               ),
             ),

@@ -69,4 +69,12 @@ class SQLiteHelper {
       whereArgs: [id],
     );
   }
+
+  // ================== FIX FOR ISSUE #2 (Part 1) ==================
+  /// Deletes all tasks from the database. Called on user logout.
+  static Future<void> clearAllTasks() async {
+    final db = await database;
+    await db.delete(_tableName);
+  }
+  // ================================================================
 }

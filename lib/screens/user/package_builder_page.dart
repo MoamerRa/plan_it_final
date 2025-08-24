@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:planit_mt/models/event_model.dart';
 import 'package:planit_mt/models/vendor/app_vendor.dart';
 import 'package:planit_mt/providers/auth_provider.dart';
 import 'package:planit_mt/providers/booking_provider.dart';
 import 'package:planit_mt/providers/event_provider.dart';
 import 'package:planit_mt/providers/package_provider.dart';
-import 'package:planit_mt/services/booking_service.dart';
 import 'package:provider/provider.dart';
 
-/// A screen that displays the user's selected vendor package and allows them to book it.
-class PackageBuilderPage extends StatelessWidget {
+class PackageBuilderPage extends StatefulWidget {
   const PackageBuilderPage({super.key});
+
+  @override
+  State<PackageBuilderPage> createState() => _PackageBuilderPageState();
+}
+
+class _PackageBuilderPageState extends State<PackageBuilderPage> {
+  // Local loading state for the booking button to ensure immediate UI feedback
+  bool _isBooking = false;
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +39,16 @@ class PackageBuilderPage extends StatelessWidget {
       ),
       body: vendors.isEmpty
           ? _buildEmptyState(context)
-          : _buildPackageContent(context, vendors, currencyFormatter),
+          : Column(
+              children: [
+                _buildEventDateHeader(context),
+                const Divider(height: 1),
+                Expanded(
+                  child:
+                      _buildPackageContent(context, vendors, currencyFormatter),
+                ),
+              ],
+            ),
       bottomNavigationBar: vendors.isEmpty
           ? null
           : _buildBookingBar(context, packageProvider, currencyFormatter),
@@ -67,7 +81,40 @@ class PackageBuilderPage extends StatelessWidget {
     );
   }
 
-  Widget _buildPackageContent(BuildContext context, List<dynamic> vendors,
+  Widget _buildEventDateHeader(BuildContext context) {
+    final eventProvider = context.watch<EventProvider>();
+    final activeEvent = eventProvider.activeEvent;
+
+    if (activeEvent == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Booking for Event Date:",
+                    style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 4),
+                Text(
+                  DateFormat('EEEE, MMMM d, yyyy').format(activeEvent.date),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPackageContent(BuildContext context, List<AppVendor> vendors,
       NumberFormat currencyFormatter) {
     return ListView.builder(
       padding: const EdgeInsets.all(8.0),
@@ -106,11 +153,8 @@ class PackageBuilderPage extends StatelessWidget {
     );
   }
 
-  // MODIFIED: Logic moved to _onBookPackagePressed
   Widget _buildBookingBar(BuildContext context, PackageProvider packageProvider,
       NumberFormat currencyFormatter) {
-    final bookingProvider = context.watch<BookingProvider>();
-
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -139,7 +183,7 @@ class PackageBuilderPage extends StatelessWidget {
             ],
           ),
           ElevatedButton.icon(
-            icon: bookingProvider.isLoading
+            icon: _isBooking
                 ? const SizedBox(
                     height: 18,
                     width: 18,
@@ -151,93 +195,77 @@ class PackageBuilderPage extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
-            onPressed: bookingProvider.isLoading
-                ? null
-                : () => _onBookPackagePressed(context),
+            onPressed: _isBooking ? null : _onBookPackagePressed,
           ),
         ],
       ),
     );
   }
 
-  // NEW METHOD: Handles the button press with validation.
-  void _onBookPackagePressed(BuildContext context) {
-    final EventModel? activeEvent = context.read<EventProvider>().activeEvent;
-    final String? userId = context.read<AuthProvider>().firebaseUser?.uid;
+  Future<void> _onBookPackagePressed() async {
+    // Show loading indicator immediately and prevent double-clicks
+    setState(() {
+      _isBooking = true;
+    });
 
-    if (activeEvent == null || userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please create an event before booking a package.'),
-          backgroundColor: Colors.orangeAccent,
-        ),
-      );
-      return;
-    }
-
-    // If validation passes, call the original handler.
-    _handleBookPackage(context, userId, activeEvent);
-  }
-
-  /// Handles the final booking process, including an availability check.
-  Future<void> _handleBookPackage(
-      BuildContext context, String userId, EventModel activeEvent) async {
+    // ================== FIX FOR LINT WARNING ==================
+    // Capture context-dependent objects BEFORE the async gap.
     final packageProvider = context.read<PackageProvider>();
     final bookingProvider = context.read<BookingProvider>();
-    final bookingService = BookingService();
+    final eventProvider = context.read<EventProvider>();
+    final authProvider = context.read<AuthProvider>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    // ==========================================================
 
-    // --- START OF NEW VALIDATION LOGIC ---
-    List<AppVendor> unavailableVendors = [];
-    // Check each vendor in the package for availability
-    for (final vendor in packageProvider.selectedVendors) {
-      final isAvailable = await bookingService.isVendorAvailable(
-          vendor.vendorId, activeEvent.date);
-      if (!isAvailable) {
-        unavailableVendors.add(vendor);
+    try {
+      final activeEvent = eventProvider.activeEvent;
+      final userId = authProvider.firebaseUser?.uid;
+
+      if (activeEvent == null || userId == null) {
+        throw Exception('Error: Could not find active event or user.');
       }
-    }
 
-    if (unavailableVendors.isNotEmpty) {
-      final names = unavailableVendors.map((v) => v.name).join(', ');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Sorry, the following vendors are no longer available: $names. Please remove them.'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+      // Create the booking requests
+      final success = await bookingProvider.createBookingsForPackage(
+        userId: userId,
+        event: activeEvent,
+        vendors: packageProvider.selectedVendors,
+      );
+
+      if (!success) {
+        throw Exception(
+            bookingProvider.error ?? 'Failed to send booking requests.');
       }
-      return; // Stop the booking process
-    }
-    // --- END OF NEW VALIDATION LOGIC ---
 
-    final success = await bookingProvider.createBookingsForPackage(
-      userId: userId,
-      event: activeEvent,
-      vendors: packageProvider.selectedVendors,
-    );
+      // --- This is the key part ---
+      // Clear the package only AFTER the requests were sent successfully.
+      packageProvider.clearPackage();
 
-    if (!context.mounted) return;
-
-    if (success) {
-      packageProvider.clearPackage(); // Clear package on success
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('All booking requests sent successfully!'),
           backgroundColor: Colors.green,
         ),
       );
-      Navigator.pop(context); // Go back from package page
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+
+      // Navigate the user back to the home screen to see the pending bookings.
+      navigator.pushNamedAndRemoveUntil('/userHome', (route) => false);
+    } catch (e) {
+      // Now it's safe to use 'messenger' here because it was captured before the await.
+      messenger.showSnackBar(
         SnackBar(
-          content:
-              Text(bookingProvider.error ?? 'Failed to send booking requests.'),
+          content: Text(e.toString().replaceFirst("Exception: ", "")),
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      // Always hide loading indicator, even if an error occurred.
+      if (mounted) {
+        setState(() {
+          _isBooking = false;
+        });
+      }
     }
   }
 }

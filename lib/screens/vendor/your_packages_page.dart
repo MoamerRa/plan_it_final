@@ -13,6 +13,9 @@ class YourPackagesPage extends StatefulWidget {
 }
 
 class _YourPackagesPageState extends State<YourPackagesPage> {
+  // NEW: A set to keep track of which booking is currently being processed.
+  final Set<String> _processingBookings = {};
+
   @override
   void initState() {
     super.initState();
@@ -25,9 +28,46 @@ class _YourPackagesPageState extends State<YourPackagesPage> {
     });
   }
 
+  // ================== NEW FUNCTION TO HANDLE BUTTON PRESSES ==================
+  Future<void> _handleUpdateStatus(
+      BuildContext context, String bookingId, BookingStatus newStatus) async {
+    // Show loading state for this specific card
+    setState(() {
+      _processingBookings.add(bookingId);
+    });
+
+    final bookingProvider = context.read<BookingProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      await bookingProvider.updateBookingStatus(bookingId, newStatus);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+              'Booking ${newStatus == BookingStatus.confirmed ? 'confirmed' : 'declined'} successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst("Exception: ", "")),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      // Hide loading state for this card, regardless of outcome
+      if (mounted) {
+        setState(() {
+          _processingBookings.remove(bookingId);
+        });
+      }
+    }
+  }
+  // ========================================================================
+
   @override
   Widget build(BuildContext context) {
-    // 'watch' listens for changes in the provider
     final bookingProvider = context.watch<BookingProvider>();
     final bookings = bookingProvider.vendorBookings;
 
@@ -54,10 +94,9 @@ class _YourPackagesPageState extends State<YourPackagesPage> {
   }
 
   Widget _buildBookingCard(BuildContext context, BookingModel booking) {
-    // 'read' is used for one-time actions inside buttons
-    final bookingProvider = context.read<BookingProvider>();
     final statusColor = _getStatusColor(booking.status);
     final statusText = booking.status.toString().split('.').last.capitalize();
+    final isProcessing = _processingBookings.contains(booking.bookingId);
 
     return Card(
       elevation: 3,
@@ -74,7 +113,6 @@ class _YourPackagesPageState extends State<YourPackagesPage> {
             const SizedBox(height: 6),
             Text(
                 'Date: ${DateFormat('dd/MM/yyyy').format(booking.bookingDate)}'),
-            // In a real app, you'd fetch the client's name from the userId
             Text('Client ID: ${booking.userId.substring(0, 6)}...'),
             const Divider(height: 20),
             Row(
@@ -94,23 +132,26 @@ class _YourPackagesPageState extends State<YourPackagesPage> {
                     ),
                   ],
                 ),
-                // Show action buttons only if the booking is pending
-                if (booking.status == BookingStatus.pending)
+                // ================== BUTTONS ARE NOW FUNCTIONAL ==================
+                if (isProcessing)
+                  const CircularProgressIndicator()
+                else if (booking.status == BookingStatus.pending)
                   Row(
                     children: [
                       TextButton(
-                        onPressed: () => bookingProvider.updateBookingStatus(
-                            booking.bookingId, BookingStatus.declined),
+                        onPressed: () => _handleUpdateStatus(
+                            context, booking.bookingId, BookingStatus.declined),
                         child: const Text('Decline',
                             style: TextStyle(color: Colors.red)),
                       ),
                       ElevatedButton(
-                        onPressed: () => bookingProvider.updateBookingStatus(
+                        onPressed: () => _handleUpdateStatus(context,
                             booking.bookingId, BookingStatus.confirmed),
                         child: const Text('Confirm'),
                       ),
                     ],
                   )
+                // ================================================================
               ],
             ),
           ],

@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:planit_mt/models/admin/app_admin.dart';
 import 'package:planit_mt/models/report_model.dart';
 import 'package:planit_mt/models/user/guest_model.dart';
-import 'package:planit_mt/models/booking_model.dart'; // Corrected import usage
+import 'package:planit_mt/models/booking_model.dart';
 import 'package:planit_mt/models/chat_message_model.dart';
 import 'package:planit_mt/models/chat_room_model.dart';
 import 'package:planit_mt/models/event_model.dart';
@@ -15,8 +15,6 @@ class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // --- Booking Management ---
-
-  /// Gets a stream of all bookings for a specific vendor.
   Stream<List<BookingModel>> getVendorBookings(String vendorId) {
     return _db
         .collection('bookings')
@@ -28,7 +26,6 @@ class FirestoreService {
             .toList());
   }
 
-  /// Updates the status of a specific booking.
   Future<void> updateBookingStatus(
       String bookingId, BookingStatus status) async {
     await _db
@@ -46,7 +43,9 @@ class FirestoreService {
       userId: event.userId,
       vendorId: vendor.vendorId,
       vendorName: vendor.name,
+      vendorCategory: vendor.category, // FIXED: Added missing argument
       eventTitle: event.title,
+      vendorPrice: vendor.price,
       bookingDate: event.date,
       createdAt: Timestamp.now(),
       status: BookingStatus.pending,
@@ -152,7 +151,6 @@ class FirestoreService {
         .delete();
   }
 
-  // MODIFIED: Now increments the budget instead of setting it
   Future<void> updateEventSpentBudget(
       {required String userId,
       required String eventId,
@@ -223,6 +221,16 @@ class FirestoreService {
         .set(event.toMap(), SetOptions(merge: true));
   }
 
+  Future<void> updateEventDate(
+      String userId, String eventId, DateTime newDate) async {
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('events')
+        .doc(eventId)
+        .update({'date': Timestamp.fromDate(newDate)});
+  }
+
   Future<EventModel?> getActiveUserEvent(String userId) async {
     try {
       final querySnapshot = await _db
@@ -243,6 +251,23 @@ class FirestoreService {
       }
       return null;
     }
+  }
+
+  // NEW: Gets a real-time stream of the user's active event.
+  Stream<EventModel?> getActiveUserEventStream(String userId) {
+    return _db
+        .collection('users')
+        .doc(userId)
+        .collection('events')
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.docs.isNotEmpty) {
+        final doc = snapshot.docs.first;
+        return EventModel.fromMap(doc.data(), doc.id);
+      }
+      return null;
+    });
   }
 
   Future<List<AppVendor>> getApprovedVendors() async {
@@ -294,12 +319,10 @@ class FirestoreService {
 
   // --- Report Management ---
 
-  /// Creates a new report document in the top-level 'reports' collection.
   Future<void> createReport(Report report) async {
     await _db.collection('reports').add(report.toMap());
   }
 
-  /// Gets a real-time stream of all reports, ordered from newest to oldest.
   Stream<List<Report>> getReports() {
     return _db
         .collection('reports')
@@ -309,7 +332,6 @@ class FirestoreService {
             snapshot.docs.map((doc) => Report.fromFirestore(doc)).toList());
   }
 
-  /// Updates the status of a specific report (e.g., from 'open' to 'resolved').
   Future<void> updateReportStatus(String reportId, ReportStatus status) async {
     await _db
         .collection('reports')
@@ -318,17 +340,13 @@ class FirestoreService {
   }
 
   Future<void> createAdmin(AdminModel admin) async {
-    // Note: The collection is 'admin' (singular) to match the login logic.
     await _db.collection('admin').doc(admin.id).set(admin.toMap());
   }
 
-  /// Checks if an email or phone number already exists across all user collections.
-  /// Returns an error message string if a duplicate is found, otherwise null.
   Future<String?> checkIfUserExists(
       {required String email, required String phone}) async {
     const collections = ['users', 'vendors', 'admin'];
     for (final collection in collections) {
-      // Check for email
       final emailQuery = await _db
           .collection(collection)
           .where('email', isEqualTo: email)
@@ -338,7 +356,6 @@ class FirestoreService {
         return 'An account with this email already exists.';
       }
 
-      // Check for phone
       final phoneQuery = await _db
           .collection(collection)
           .where('phone', isEqualTo: phone)
@@ -348,10 +365,9 @@ class FirestoreService {
         return 'An account with this phone number already exists.';
       }
     }
-    return null; // No duplicates found
+    return null;
   }
 
-  /// Finds a user by identifier (phone or case-insensitive name).
   Future<Map<String, String?>?> findUserEmailAndRole(String identifier) async {
     const collectionsToSearch = {
       'users': 'user',
@@ -363,7 +379,6 @@ class FirestoreService {
       final collectionName = entry.key;
       final role = entry.value;
 
-      // Query by phone number first
       var querySnapshot = await _db
           .collection(collectionName)
           .where('phone', isEqualTo: identifier)
@@ -375,7 +390,6 @@ class FirestoreService {
         return {'email': data['email'], 'role': role};
       }
 
-      // If not found by phone, query by the lowercase name field
       querySnapshot = await _db
           .collection(collectionName)
           .where('name_lowercase', isEqualTo: identifier.toLowerCase())

@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/event_provider.dart';
-import '../../models/vendor/app_vendor.dart';
 
 class CreateEventPage extends StatefulWidget {
   const CreateEventPage({super.key});
@@ -17,28 +16,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
   final _titleController = TextEditingController();
   final _budgetController = TextEditingController();
   DateTime? _selectedDate;
-
-  AppVendor? _selectedVendor; // NEW: optional vendor coming from Explore
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Accept an optional vendor passed via Navigator arguments
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (_selectedVendor == null && args is Map && args['vendor'] != null) {
-      try {
-        _selectedVendor = AppVendor.fromJson(
-            Map<String, dynamic>.from(args['vendor'] as Map));
-      } catch (_) {
-        // ignore malformed payloads
-      }
-    }
-  }
 
   @override
   void dispose() {
@@ -62,9 +39,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
   Future<void> _submitForm() async {
     final form = _formKey.currentState;
-    if (form == null) return;
-
-    if (!form.validate()) return;
+    if (form == null || !form.validate()) {
+      return;
+    }
 
     if (_selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -73,11 +50,16 @@ class _CreateEventPageState extends State<CreateEventPage> {
       return;
     }
 
+    // Capture providers before async call
     final eventProvider = context.read<EventProvider>();
-    final userId = context.read<AuthProvider>().firebaseUser?.uid;
+    final authProvider = context.read<AuthProvider>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final userId = authProvider.firebaseUser?.uid;
 
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Error: User not logged in.')),
       );
       return;
@@ -85,7 +67,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
     final budget = double.tryParse(_budgetController.text.trim());
     if (budget == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Please enter a valid budget amount.')),
       );
       return;
@@ -98,16 +80,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
       userId: userId,
     );
 
-    if (!mounted) return;
-
     if (error == null) {
-      // MODIFIED: Pop with a result to notify the previous screen
-      Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Event created successfully!')),
       );
+      // NEW FLOW: Replace the current page with the vendor exploration page
+      navigator.pushReplacementNamed('/exploreVendors');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text(error), backgroundColor: Colors.red),
       );
     }
@@ -129,9 +109,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_selectedVendor != null)
-                _SelectedVendorBanner(vendorName: _selectedVendor!.name),
-              if (_selectedVendor != null) const SizedBox(height: 12),
               TextFormField(
                 controller: _titleController,
                 textInputAction: TextInputAction.next,
@@ -188,42 +165,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Create Event'),
+                      : const Text('Create Event & Find Vendors'),
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _SelectedVendorBanner extends StatelessWidget {
-  final String vendorName;
-  const _SelectedVendorBanner({required this.vendorName});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEF7E0),
-        border: Border.all(color: const Color(0xFFF3D27F)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.storefront, color: Color(0xFFBFA054)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Selected vendor: $vendorName',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
       ),
     );
   }
