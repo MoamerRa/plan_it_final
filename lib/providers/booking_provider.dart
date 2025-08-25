@@ -30,8 +30,8 @@ class BookingProvider with ChangeNotifier {
     required String userId,
     required EventModel event,
     required List<AppVendor> vendors,
-  }) async {
-    _isLoading = true;
+  }) {
+    /* ... unchanged ... */ _isLoading = true;
     notifyListeners();
     try {
       for (final vendor in vendors) {
@@ -48,23 +48,23 @@ class BookingProvider with ChangeNotifier {
           status: BookingStatus.pending,
           createdAt: Timestamp.now(),
         );
-        await _bookingService.createBookingRequest(newBooking);
+        _bookingService.createBookingRequest(newBooking);
       }
       _isLoading = false;
       _error = null;
       notifyListeners();
-      return true;
+      return Future.value(true);
     } catch (e) {
       _error = "Failed to create package booking requests: $e";
       debugPrint(_error);
       _isLoading = false;
       notifyListeners();
-      return false;
+      return Future.value(false);
     }
   }
 
   void fetchVendorBookings(String vendorId) {
-    _isLoading = true;
+    /* ... unchanged ... */ _isLoading = true;
     notifyListeners();
     _vendorBookingsSubscription?.cancel();
     _vendorBookingsSubscription =
@@ -82,7 +82,7 @@ class BookingProvider with ChangeNotifier {
   }
 
   void fetchUserBookings(String userId) {
-    _isLoading = true;
+    /* ... unchanged ... */ _isLoading = true;
     notifyListeners();
     _userBookingsSubscription?.cancel();
     _userBookingsSubscription =
@@ -114,7 +114,6 @@ class BookingProvider with ChangeNotifier {
         await _bookingService.updateBookingStatus(bookingId, newStatus);
       }
 
-      // This logic is crucial: update the budget ONLY when a booking is confirmed or a confirmed booking is cancelled.
       if (newStatus == BookingStatus.confirmed && !wasConfirmed) {
         await _firestoreService.updateEventSpentBudget(
           userId: originalBooking.userId,
@@ -130,36 +129,47 @@ class BookingProvider with ChangeNotifier {
           amountToAdd: -originalBooking.vendorPrice,
         );
       }
+
+      // ================== FIX FOR ISSUE #3 ==================
+      // If the vendor declined the request, create a notification for the user.
+      if (newStatus == BookingStatus.declined) {
+        await _firestoreService.addUserNotification(
+          userId: originalBooking.userId,
+          message:
+              "Unfortunately, your booking request with ${originalBooking.vendorName} for ${originalBooking.eventTitle} has been declined.",
+        );
+      }
+      // ======================================================
     } catch (e) {
       _error = "Failed to update booking status: $e";
       debugPrint(_error);
       notifyListeners();
-      // Rethrow the exception so the UI can catch it and show an error.
       throw Exception(_error);
     }
   }
 
-  Future<void> userCancelBooking(String bookingId) async {
-    try {
+  Future<void> userCancelBooking(String bookingId) {
+    /* ... unchanged ... */ try {
       final originalBooking =
           _userBookings.firstWhere((b) => b.bookingId == bookingId);
       final wasConfirmed = originalBooking.status == BookingStatus.confirmed;
 
       if (wasConfirmed) {
-        await _bookingService.releaseBookingInTransaction(originalBooking);
-        await _firestoreService.updateEventSpentBudget(
+        _bookingService.releaseBookingInTransaction(originalBooking);
+        _firestoreService.updateEventSpentBudget(
           userId: originalBooking.userId,
           eventId: originalBooking.eventId,
           amountToAdd: -originalBooking.vendorPrice, // Subtract the price
         );
       } else {
-        await _bookingService.updateBookingStatus(
-            bookingId, BookingStatus.cancelled);
+        _bookingService.updateBookingStatus(bookingId, BookingStatus.cancelled);
       }
+      return Future.value();
     } catch (e) {
       _error = "Failed to cancel booking: $e";
       debugPrint(_error);
       notifyListeners();
+      return Future.error(e);
     }
   }
 

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:planit_mt/models/booking_model.dart';
-import 'package:planit_mt/models/event_model.dart';
 import 'package:planit_mt/providers/auth_provider.dart';
 import 'package:planit_mt/providers/booking_provider.dart';
 import 'package:planit_mt/providers/event_provider.dart';
 import 'package:planit_mt/providers/task_provider.dart';
+import 'package:planit_mt/services/firestore_service.dart';
 import 'package:planit_mt/widgets/navButton.dart';
 import 'package:planit_mt/widgets/overview_box.dart';
 import 'package:planit_mt/widgets/vendor/vendor_list.dart';
@@ -30,11 +30,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
   Future<void> _loadInitialData() async {
     if (!mounted) return;
-    await _refreshData(); // Use the refresh method for initial load
+    await _refreshData();
   }
 
-  // ================== FIX FOR ISSUE #1 (Part 1) ==================
-  // This method will be used for both initial load and pull-to-refresh.
   Future<void> _refreshData() async {
     if (!mounted) return;
 
@@ -42,28 +40,41 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     final eventProvider = context.read<EventProvider>();
     final bookingProvider = context.read<BookingProvider>();
     final taskProvider = context.read<TaskProvider>();
+    final firestoreService = context.read<FirestoreService>();
 
     final user = authProvider.firebaseUser;
     if (user != null) {
-      // Fetch all data sources concurrently for faster loading.
+      // Fetch all data sources concurrently
       await Future.wait([
         Future.microtask(() => eventProvider.listenToUserEvent(user.uid)),
         Future.microtask(() => bookingProvider.fetchUserBookings(user.uid)),
         Future.microtask(() => taskProvider.fetchTasks()),
       ]);
 
-      // A short delay to allow the listener to get the first event
-      await Future.delayed(const Duration(milliseconds: 500));
+      // ================== FIX FOR ISSUE #2 & #3 ==================
+      // After fetching bookings, sync them with the local task database.
+      final confirmedBookings = bookingProvider.userBookings
+          .where((b) => b.status == BookingStatus.confirmed)
+          .toList();
+      await taskProvider.syncTasksWithBookings(confirmedBookings);
 
+      // Check for any new notifications from vendors.
+      final notifications =
+          await firestoreService.getAndClearUserNotifications(userId: user.uid);
+      if (notifications.isNotEmpty && mounted) {
+        _showNotificationsDialog(notifications);
+      }
+      // ================================================================
+
+      await Future.delayed(const Duration(milliseconds: 500));
       if (mounted && eventProvider.activeEvent == null) {
         _showCreateEventDialog();
       }
     }
   }
-  // ================================================================
 
   void _showCreateEventDialog() {
-    if (!mounted) return;
+    /* ... unchanged ... */ if (!mounted) return;
 
     showDialog(
       context: context,
@@ -78,7 +89,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               child: const Text("Create Event"),
               onPressed: () async {
                 Navigator.of(dialogContext).pop();
-                // No need to check result, the stream will update the UI.
                 await Navigator.pushNamed(context, '/createEvent');
               },
             ),
@@ -88,11 +98,31 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
+  // ================== NEW DIALOG FOR NOTIFICATIONS ==================
+  void _showNotificationsDialog(List<String> messages) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Notifications"),
+        content: SingleChildScrollView(
+          child: ListBody(
+            children: messages.map((msg) => Text("• $msg")).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text("OK"),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+  // =================================================================
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<UserProvider>().user;
-    final eventProvider = context.watch<EventProvider>();
-    final activeEvent = eventProvider.activeEvent;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -116,13 +146,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       ),
       body: user == null
           ? const Center(child: CircularProgressIndicator())
-          // ================== FIX FOR ISSUE #1 (Part 2) ==================
-          // Wrap the body with RefreshIndicator.
           : RefreshIndicator(
               onRefresh: _refreshData,
               child: SingleChildScrollView(
-                physics:
-                    const AlwaysScrollableScrollPhysics(), // Important for refresh
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                 child: Column(
@@ -130,7 +157,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                   children: [
                     _headerSection(user.name),
                     const SizedBox(height: 20),
-                    _buildEventOverview(context, activeEvent),
+                    _buildEventOverview(context),
                     const SizedBox(height: 24),
                     const NavButton(
                         route: '/userplan',
@@ -158,12 +185,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                 ),
               ),
             ),
-      // ================================================================
     );
   }
 
   Widget _headerSection(String username) {
-    return Stack(
+    /* ... unchanged ... */ return Stack(
       alignment: Alignment.center,
       children: [
         Image.asset(
@@ -198,12 +224,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  Widget _buildEventOverview(BuildContext context, EventModel? event) {
-    // ================== FIX FOR ISSUE #1 (Part 3) ==================
-    // Ensure we are WATCHING the providers here so the UI rebuilds on change.
+  Widget _buildEventOverview(BuildContext context) {
     final eventProvider = context.watch<EventProvider>();
     final taskProvider = context.watch<TaskProvider>();
-    // ================================================================
     final liveEvent = eventProvider.activeEvent;
 
     if (eventProvider.isLoading && liveEvent == null) {
@@ -251,7 +274,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   Widget _buildOverviewSkeletons() {
-    return Row(
+    /* ... unchanged ... */ return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: List.generate(
           3,
@@ -267,7 +290,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   Widget _buildBookedVendors(BuildContext context) {
-    final bookingProvider = context.watch<BookingProvider>();
+    /* ... unchanged ... */ final bookingProvider =
+        context.watch<BookingProvider>();
     final confirmedBookings = bookingProvider.userBookings
         .where((b) => b.status == BookingStatus.confirmed)
         .toList();

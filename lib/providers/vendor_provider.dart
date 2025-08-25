@@ -21,7 +21,6 @@ class VendorProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  // Constructor is now empty to implement lazy loading.
   VendorProvider();
 
   void setVendor(AppVendor vendor) {
@@ -29,8 +28,11 @@ class VendorProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ================== FIX FOR ISSUE #1 ==================
+  // The guard clause `if (_approvedVendors.isNotEmpty) return;` has been removed.
+  // This ensures that the vendor list is always fetched fresh from Firestore
+  // when the user navigates to the Explore page, showing newly approved vendors.
   Future<void> fetchApprovedVendors() async {
-    if (_approvedVendors.isNotEmpty) return;
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -43,6 +45,7 @@ class VendorProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+  // ======================================================
 
   Future<String?> updateProfile({
     required String description,

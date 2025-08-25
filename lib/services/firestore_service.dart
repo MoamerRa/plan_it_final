@@ -403,4 +403,39 @@ class FirestoreService {
     }
     return null;
   }
+
+  // Adds a notification document to a subcollection for a specific user.
+  Future<void> addUserNotification(
+      {required String userId, required String message}) async {
+    await _db.collection('users').doc(userId).collection('notifications').add({
+      'message': message,
+      'createdAt': FieldValue.serverTimestamp(),
+      'read': false,
+    });
+  }
+
+  // Retrieves all unread notifications for a user and then deletes them to prevent re-showing.
+  Future<List<String>> getAndClearUserNotifications(
+      {required String userId}) async {
+    final notificationsRef =
+        _db.collection('users').doc(userId).collection('notifications');
+
+    final snapshot = await notificationsRef.orderBy('createdAt').get();
+
+    if (snapshot.docs.isEmpty) {
+      return [];
+    }
+
+    final messages =
+        snapshot.docs.map((doc) => doc.data()['message'] as String).toList();
+
+    // Delete the fetched notifications in a batch write for efficiency.
+    final batch = _db.batch();
+    for (var doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+
+    return messages;
+  }
 }

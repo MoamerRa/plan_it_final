@@ -35,6 +35,7 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final activeEvent = context.read<EventProvider>().activeEvent;
       if (activeEvent != null) {
+        // Fetch vendors and their availability
         context.read<VendorProvider>().fetchApprovedVendors();
         _checkVendorAvailability();
       }
@@ -47,10 +48,13 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
     super.dispose();
   }
 
+  // ================== FIX FOR ISSUE #1 ==================
+  // This refresh function is now connected to the RefreshIndicator.
   Future<void> _refresh() async {
     await context.read<VendorProvider>().fetchApprovedVendors();
     await _checkVendorAvailability();
   }
+  // ======================================================
 
   Future<void> _checkVendorAvailability() async {
     final activeEvent = context.read<EventProvider>().activeEvent;
@@ -96,13 +100,11 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text("Something went wrong. No event date found."),
+              const Text("Create an event to start exploring vendors."),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: const Text('Go Back'),
+                onPressed: () => Navigator.pushNamed(context, '/createEvent'),
+                child: const Text('Create Event'),
               )
             ],
           ),
@@ -133,10 +135,13 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
           _buildSearchBar(),
           _buildCategoryChips(),
           Expanded(
+            // ================== FIX FOR ISSUE #1 ==================
+            // Added RefreshIndicator for pull-to-refresh functionality.
             child: RefreshIndicator(
               onRefresh: _refresh,
               child: _buildContent(vendorProvider, filteredVendors),
             ),
+            // ======================================================
           ),
         ],
       ),
@@ -153,7 +158,7 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
   }
 
   Widget _buildSearchBar() {
-    return Padding(
+    /* ... unchanged ... */ return Padding(
       padding: const EdgeInsets.all(16.0),
       child: TextField(
         controller: _searchController,
@@ -173,7 +178,7 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
   }
 
   Widget _buildCategoryChips() {
-    return SingleChildScrollView(
+    /* ... unchanged ... */ return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
@@ -198,7 +203,7 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
   }
 
   Widget _buildContent(VendorProvider provider, List<AppVendor> vendors) {
-    if (provider.isLoading) {
+    /* ... unchanged ... */ if (provider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
     if (provider.error != null) {
@@ -244,7 +249,8 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
   }
 
   Widget _buildVendorCard(BuildContext context, AppVendor vendor) {
-    final packageProvider = context.watch<PackageProvider>();
+    /* ... unchanged ... */ final packageProvider =
+        context.watch<PackageProvider>();
     final isAdded = packageProvider.isVendorInPackage(vendor);
     final isUnavailable = _unavailableVendorIds.contains(vendor.vendorId);
     final imageUrl = vendor.imageUrl.isNotEmpty
@@ -301,7 +307,6 @@ class _ExploreVendorsPageState extends State<ExploreVendorsPage> {
                       ],
                     ),
                   ),
-                  // --- FIX: Logic to handle all button states ---
                   if (isUnavailable)
                     const ElevatedButton(
                       onPressed: null,
