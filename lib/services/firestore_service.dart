@@ -53,12 +53,10 @@ class FirestoreService {
     await newBookingRef.set(booking.toMap());
   }
 
-  // --- Chat Management ---
   Stream<List<ChatRoom>> getChatRooms(String userId) {
     return _db
         .collection('chats')
         .where('participants', arrayContains: userId)
-        .orderBy('lastMessageTimestamp', descending: true)
         .snapshots()
         .map((snapshot) =>
             snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList());

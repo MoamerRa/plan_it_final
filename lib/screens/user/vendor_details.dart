@@ -54,7 +54,8 @@ class VendorDetailsPage extends StatelessWidget {
       ),
       body: ListView(
         children: [
-          VendorImageHeader(image: vendor.imageUrl),
+          // --- FIX: Passed the vendor name to the header for the placeholder ---
+          VendorImageHeader(image: vendor.imageUrl, vendorName: vendor.name),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -94,7 +95,6 @@ class VendorDetailsPage extends StatelessWidget {
     final isAdded = packageProvider.isVendorInPackage(vendor);
     final activeEvent = context.watch<EventProvider>().activeEvent;
 
-    // If there's no active event, we can't check availability.
     if (activeEvent == null) {
       return Center(
         child: Column(
@@ -118,7 +118,7 @@ class VendorDetailsPage extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final isAvailable = snapshot.data ?? true; // Assume available on error
+        final isAvailable = snapshot.data ?? true;
 
         return Center(
           child: Column(
