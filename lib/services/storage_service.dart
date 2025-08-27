@@ -33,7 +33,11 @@ class StorageService {
     try {
       final fileName =
           '${uid}_gallery_${DateTime.now().millisecondsSinceEpoch}${path.extension(imageFile.path)}';
-      final ref = _storage.ref().child('vendor_gallery_images').child(fileName);
+      final ref = _storage
+          .ref()
+          .child('vendor_gallery_images')
+          .child(uid)
+          .child(fileName);
       final uploadTask = ref.putFile(imageFile);
       final snapshot = await uploadTask.whenComplete(() => {});
       final downloadUrl = await snapshot.ref.getDownloadURL();
@@ -51,8 +55,16 @@ class StorageService {
     required String uid,
   }) async {
     try {
-      final fileName = 'profile_$uid${path.extension(imageFile.path)}';
-      final ref = _storage.ref().child('vendor_profile_images').child(fileName);
+      // --- FIX: Changed the path structure to match the security rule ---
+      // The new path will be: vendor_profile_images/USER_ID/profile.jpg
+      // This is more organized and secure.
+      final fileExtension = path.extension(imageFile.path);
+      final ref = _storage
+          .ref()
+          .child('vendor_profile_images') // The main folder
+          .child(uid) // A subfolder for this specific vendor
+          .child('profile$fileExtension'); // The file itself
+
       final uploadTask = ref.putFile(imageFile);
       final snapshot = await uploadTask.whenComplete(() => {});
       final downloadUrl = await snapshot.ref.getDownloadURL();
@@ -70,7 +82,6 @@ class StorageService {
     required String uid,
   }) async {
     try {
-      // FIX: Removed unnecessary braces in string interpolation
       final fileName = '$uid${path.extension(imageFile.path)}';
       final ref = _storage.ref().child('user_profile_images').child(fileName);
       final uploadTask = ref.putFile(imageFile);
