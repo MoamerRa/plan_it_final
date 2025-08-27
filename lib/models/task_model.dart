@@ -1,4 +1,3 @@
-// Represents a single to-do task for an event.
 class Task {
   final int? id; // Nullable for new tasks that don't have an ID yet.
   final String title;

@@ -1,7 +1,7 @@
 class UserModel {
   final String id;
   final String name;
-  final String namelowercase; 
+  final String namelowercase;
   final String email;
   final String phone;
   final String role;
@@ -14,7 +14,8 @@ class UserModel {
     required this.phone,
     required this.role,
     required this.customId,
-  }) : namelowercase = name.toLowerCase(); // Automatically set the lowercase version
+  }) : namelowercase =
+            name.toLowerCase(); // Automatically set the lowercase version
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(

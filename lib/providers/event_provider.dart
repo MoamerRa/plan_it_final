@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -16,24 +17,36 @@ class EventProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  // UPDATED: Now listens for real-time changes
-  void listenToUserEvent(String userId) {
+  // ================== START OF FIX ==================
+  // The function now returns a Future that completes when the first batch of data is loaded.
+  Future<void> listenToUserEvent(String userId) {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
-    _eventSubscription?.cancel(); // Cancel any previous listener
+    _eventSubscription?.cancel();
+    final completer = Completer<void>();
+
     _eventSubscription =
         _firestoreService.getActiveUserEventStream(userId).listen((event) {
       _activeEvent = event;
       _isLoading = false;
       notifyListeners();
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
     }, onError: (e) {
       _error = "Failed to listen to event updates: $e";
       _isLoading = false;
       notifyListeners();
+      if (!completer.isCompleted) {
+        completer.completeError(e);
+      }
     });
+
+    return completer.future;
   }
+  // ================== END OF FIX ==================
 
   Future<String?> createNewEvent({
     required String title,
@@ -110,4 +123,4 @@ class EventProvider extends ChangeNotifier {
     _eventSubscription?.cancel();
     super.dispose();
   }
-}
+}   

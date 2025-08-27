@@ -28,10 +28,6 @@ class VendorProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ================== FIX FOR ISSUE #1 ==================
-  // The guard clause `if (_approvedVendors.isNotEmpty) return;` has been removed.
-  // This ensures that the vendor list is always fetched fresh from Firestore
-  // when the user navigates to the Explore page, showing newly approved vendors.
   Future<void> fetchApprovedVendors() async {
     _isLoading = true;
     _error = null;
@@ -45,13 +41,14 @@ class VendorProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-  // ======================================================
 
+  // ================== START OF MODIFICATION ==================
   Future<String?> updateProfile({
     required String description,
     required double price,
     required String category,
     required List<File> newGalleryImages,
+    File? newProfileImage, // <-- ADDED: Optional new profile image
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -64,6 +61,21 @@ class VendorProvider extends ChangeNotifier {
     }
 
     try {
+      // Create a mutable copy of the current vendor to update
+      AppVendor updatedVendor = _vendor!.copyWith();
+
+      // --- 1. Handle Profile Image Upload ---
+      if (newProfileImage != null) {
+        final profileImageUrl = await _storageService.uploadVendorProfileImage(
+          imageFile: newProfileImage,
+          uid: user.uid,
+        );
+        if (profileImageUrl != null) {
+          updatedVendor.imageUrl = profileImageUrl;
+        }
+      }
+
+      // --- 2. Handle Gallery Images Upload ---
       List<String> newImageUrls = [];
       for (var imageFile in newGalleryImages) {
         final imageUrl = await _storageService.uploadVendorGalleryImage(
@@ -75,23 +87,26 @@ class VendorProvider extends ChangeNotifier {
         }
       }
 
+      // --- 3. Prepare data for Firestore ---
       final updatedData = {
         'description': description,
         'price': price,
         'category': category,
         'galleryUrls': FieldValue.arrayUnion(newImageUrls),
+        'imageUrl': updatedVendor.imageUrl, // Ensure the new URL is included
       };
 
       await _firestoreService.updateVendorProfile(user.uid, updatedData);
 
-      _vendor = _vendor!.copyWith(
+      // --- 4. Update local state ---
+      _vendor = updatedVendor.copyWith(
         description: description,
         price: price,
         category: category,
         galleryUrls: [..._vendor!.galleryUrls, ...newImageUrls],
       );
 
-      return null;
+      return null; // Success
     } catch (e) {
       return e.toString();
     } finally {
@@ -99,4 +114,5 @@ class VendorProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+  // ================== END OF MODIFICATION ==================
 }

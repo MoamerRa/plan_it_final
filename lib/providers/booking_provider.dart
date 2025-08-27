@@ -31,7 +31,7 @@ class BookingProvider with ChangeNotifier {
     required EventModel event,
     required List<AppVendor> vendors,
   }) {
-    /* ... unchanged ... */ _isLoading = true;
+    _isLoading = true;
     notifyListeners();
     try {
       for (final vendor in vendors) {
@@ -64,7 +64,7 @@ class BookingProvider with ChangeNotifier {
   }
 
   void fetchVendorBookings(String vendorId) {
-    /* ... unchanged ... */ _isLoading = true;
+    _isLoading = true;
     notifyListeners();
     _vendorBookingsSubscription?.cancel();
     _vendorBookingsSubscription =
@@ -81,23 +81,37 @@ class BookingProvider with ChangeNotifier {
     });
   }
 
-  void fetchUserBookings(String userId) {
-    /* ... unchanged ... */ _isLoading = true;
+  // ================== START OF FIX ==================
+  // The function now returns a Future that completes when the first batch of data is loaded.
+  Future<void> fetchUserBookings(String userId) {
+    _isLoading = true;
     notifyListeners();
     _userBookingsSubscription?.cancel();
+
+    final completer = Completer<void>();
+
     _userBookingsSubscription =
         _bookingService.getUserBookingsStream(userId).listen((bookings) {
       _userBookings = bookings;
       _isLoading = false;
       _error = null;
       notifyListeners();
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
     }, onError: (e) {
       _error = "Failed to fetch user bookings: $e";
       debugPrint(_error);
       _isLoading = false;
       notifyListeners();
+      if (!completer.isCompleted) {
+        completer.completeError(e);
+      }
     });
+
+    return completer.future;
   }
+  // ================== END OF FIX ==================
 
   Future<void> updateBookingStatus(
       String bookingId, BookingStatus newStatus) async {
@@ -130,8 +144,6 @@ class BookingProvider with ChangeNotifier {
         );
       }
 
-      // ================== FIX FOR ISSUE #3 ==================
-      // If the vendor declined the request, create a notification for the user.
       if (newStatus == BookingStatus.declined) {
         await _firestoreService.addUserNotification(
           userId: originalBooking.userId,
@@ -139,7 +151,6 @@ class BookingProvider with ChangeNotifier {
               "Unfortunately, your booking request with ${originalBooking.vendorName} for ${originalBooking.eventTitle} has been declined.",
         );
       }
-      // ======================================================
     } catch (e) {
       _error = "Failed to update booking status: $e";
       debugPrint(_error);
@@ -149,7 +160,7 @@ class BookingProvider with ChangeNotifier {
   }
 
   Future<void> userCancelBooking(String bookingId) {
-    /* ... unchanged ... */ try {
+    try {
       final originalBooking =
           _userBookings.firstWhere((b) => b.bookingId == bookingId);
       final wasConfirmed = originalBooking.status == BookingStatus.confirmed;
@@ -159,7 +170,7 @@ class BookingProvider with ChangeNotifier {
         _firestoreService.updateEventSpentBudget(
           userId: originalBooking.userId,
           eventId: originalBooking.eventId,
-          amountToAdd: -originalBooking.vendorPrice, // Subtract the price
+          amountToAdd: -originalBooking.vendorPrice,
         );
       } else {
         _bookingService.updateBookingStatus(bookingId, BookingStatus.cancelled);

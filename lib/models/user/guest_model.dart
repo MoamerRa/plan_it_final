@@ -1,4 +1,3 @@
-
 // Enum to represent the status of a guest's RSVP
 enum GuestStatus {
   pending,

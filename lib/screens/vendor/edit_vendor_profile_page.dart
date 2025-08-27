@@ -18,6 +18,8 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
   late TextEditingController _priceController;
 
   String? _selectedCategory;
+  File? _newProfileImage;
+  final List<File> _newGalleryImages = [];
 
   final List<String> _categories = [
     'Hall',
@@ -29,8 +31,6 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
     'Makeup'
   ];
 
-  final List<File> _newGalleryImages = [];
-
   @override
   void initState() {
     super.initState();
@@ -39,7 +39,6 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
         TextEditingController(text: vendor?.description ?? '');
     _priceController =
         TextEditingController(text: vendor?.price.toString() ?? '0.0');
-
     _selectedCategory = vendor?.category;
     if (!_categories.contains(_selectedCategory)) {
       _selectedCategory = null;
@@ -53,10 +52,19 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
     super.dispose();
   }
 
-  // --- REVERTED: Back to a simple gallery picker ---
-  Future<void> _pickImage() async {
-    final pickedFile =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
+  Future<void> _pickProfileImage() async {
+    final pickedFile = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (pickedFile != null) {
+      setState(() {
+        _newProfileImage = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<void> _pickGalleryImage() async {
+    final pickedFile = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 70);
     if (pickedFile != null) {
       setState(() {
         _newGalleryImages.add(File(pickedFile.path));
@@ -65,9 +73,7 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
   }
 
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a category.')),
@@ -83,6 +89,7 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
       price: price,
       category: _selectedCategory!,
       newGalleryImages: _newGalleryImages,
+      newProfileImage: _newProfileImage,
     );
 
     if (!mounted) return;
@@ -109,8 +116,6 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Your Profile'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         actions: [
           IconButton(
             icon: const Icon(Icons.save_outlined),
@@ -127,6 +132,9 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildSectionTitle('Profile Header Image'),
+                    _buildProfileImagePicker(vendor),
+                    const SizedBox(height: 24),
                     _buildSectionTitle('Business Description'),
                     TextFormField(
                       controller: _descriptionController,
@@ -149,9 +157,7 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
                         );
                       }).toList(),
                       onChanged: (newValue) {
-                        setState(() {
-                          _selectedCategory = newValue;
-                        });
+                        setState(() => _selectedCategory = newValue);
                       },
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
@@ -185,13 +191,7 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: _saveProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFBFA054),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: const Text('Save Changes',
-                            style: TextStyle(fontSize: 16)),
+                        child: const Text('Save Changes'),
                       ),
                     ),
                   ],
@@ -207,6 +207,55 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
       child: Text(
         title,
         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildProfileImagePicker(AppVendor? vendor) {
+    ImageProvider? imageProvider;
+    if (_newProfileImage != null) {
+      imageProvider = FileImage(_newProfileImage!);
+    } else if (vendor != null && vendor.imageUrl.isNotEmpty) {
+      imageProvider = NetworkImage(vendor.imageUrl);
+    }
+
+    return Center(
+      child: Stack(
+        children: [
+          Container(
+            height: 150,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
+              image: imageProvider != null
+                  ? DecorationImage(image: imageProvider, fit: BoxFit.cover)
+                  : null,
+            ),
+            child: imageProvider == null
+                ? const Icon(Icons.image, size: 50, color: Colors.grey)
+                : null,
+          ),
+          Positioned.fill(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _pickProfileImage,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_alt, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -229,9 +278,10 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
         itemCount:
             (vendor?.galleryUrls.length ?? 0) + _newGalleryImages.length + 1,
         itemBuilder: (context, index) {
-          if (index ==
-              (vendor?.galleryUrls.length ?? 0) + _newGalleryImages.length) {
-            return _buildAddImageButton();
+          final totalImages =
+              (vendor?.galleryUrls.length ?? 0) + _newGalleryImages.length;
+          if (index == totalImages) {
+            return _buildAddGalleryImageButton();
           }
           if (index < _newGalleryImages.length) {
             return ClipRRect(
@@ -250,10 +300,9 @@ class _EditVendorProfilePageState extends State<EditVendorProfilePage> {
     );
   }
 
-  Widget _buildAddImageButton() {
-    // --- REVERTED: Back to a simple onTap ---
+  Widget _buildAddGalleryImageButton() {
     return InkWell(
-      onTap: _pickImage,
+      onTap: _pickGalleryImage,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         decoration: BoxDecoration(

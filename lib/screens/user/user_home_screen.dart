@@ -33,6 +33,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     await _refreshData();
   }
 
+  // ================== START OF FIX ==================
   Future<void> _refreshData() async {
     if (!mounted) return;
 
@@ -40,19 +41,19 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     final eventProvider = context.read<EventProvider>();
     final bookingProvider = context.read<BookingProvider>();
     final taskProvider = context.read<TaskProvider>();
-    final firestoreService = context.read<FirestoreService>();
+    // Instantiate FirestoreService directly instead of using context.read
+    final firestoreService = FirestoreService();
 
     final user = authProvider.firebaseUser;
     if (user != null) {
-      // Fetch all data sources concurrently
+      // Now we await the futures, which will complete after data is loaded.
       await Future.wait([
-        Future.microtask(() => eventProvider.listenToUserEvent(user.uid)),
-        Future.microtask(() => bookingProvider.fetchUserBookings(user.uid)),
-        Future.microtask(() => taskProvider.fetchTasks()),
+        eventProvider.listenToUserEvent(user.uid),
+        bookingProvider.fetchUserBookings(user.uid),
+        taskProvider.fetchTasks(),
       ]);
 
-      // ================== FIX FOR ISSUE #2 & #3 ==================
-      // After fetching bookings, sync them with the local task database.
+      // This code now runs AFTER the booking data is available in the provider.
       final confirmedBookings = bookingProvider.userBookings
           .where((b) => b.status == BookingStatus.confirmed)
           .toList();
@@ -64,7 +65,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       if (notifications.isNotEmpty && mounted) {
         _showNotificationsDialog(notifications);
       }
-      // ================================================================
 
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted && eventProvider.activeEvent == null) {
@@ -72,9 +72,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       }
     }
   }
+  // ================== END OF FIX ==================
 
   void _showCreateEventDialog() {
-    /* ... unchanged ... */ if (!mounted) return;
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -98,7 +99,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  // ================== NEW DIALOG FOR NOTIFICATIONS ==================
   void _showNotificationsDialog(List<String> messages) {
     showDialog(
       context: context,
@@ -118,7 +118,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       ),
     );
   }
-  // =================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -189,7 +188,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   Widget _headerSection(String username) {
-    /* ... unchanged ... */ return Stack(
+    return Stack(
       alignment: Alignment.center,
       children: [
         Image.asset(
@@ -274,7 +273,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   Widget _buildOverviewSkeletons() {
-    /* ... unchanged ... */ return Row(
+    return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: List.generate(
           3,
@@ -290,8 +289,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   Widget _buildBookedVendors(BuildContext context) {
-    /* ... unchanged ... */ final bookingProvider =
-        context.watch<BookingProvider>();
+    final bookingProvider = context.watch<BookingProvider>();
     final confirmedBookings = bookingProvider.userBookings
         .where((b) => b.status == BookingStatus.confirmed)
         .toList();

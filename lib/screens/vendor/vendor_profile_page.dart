@@ -17,7 +17,6 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
   @override
   void initState() {
     super.initState();
-    // Fetch bookings when the page loads, so we can show stats
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final vendorId = context.read<AuthProvider>().firebaseUser?.uid;
       if (vendorId != null) {
@@ -34,21 +33,7 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
       body: vendor == null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  const Text("Loading Vendor Profile..."),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () => context.read<AuthProvider>().signOut(),
-                    child: const Text("Having trouble? Try logging out."),
-                  )
-                ],
-              ),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
               slivers: [
                 _buildSliverAppBar(context, vendor),
@@ -71,9 +56,9 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
           style: const TextStyle(color: Colors.black, fontSize: 16.0),
         ),
         background: vendor.imageUrl.isEmpty
-            ? Image.network(
-                'https://placehold.co/600x400/FFF9E6/BFA054?text=${vendor.name}',
-                fit: BoxFit.cover,
+            ? Container(
+                color: Colors.grey.shade300,
+                child: const Icon(Icons.business, size: 80, color: Colors.grey),
               )
             : Image.network(
                 vendor.imageUrl,
@@ -81,9 +66,10 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
                 color: Colors.black.withOpacity(0.3),
                 colorBlendMode: BlendMode.darken,
                 errorBuilder: (context, error, stackTrace) {
-                  return Image.network(
-                    'https://placehold.co/600x400/FFF9E6/BFA054?text=Image+Error',
-                    fit: BoxFit.cover,
+                  return Container(
+                    color: Colors.grey.shade300,
+                    child: const Icon(Icons.broken_image,
+                        size: 80, color: Colors.grey),
                   );
                 },
               ),
@@ -100,8 +86,8 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
     );
   }
 
+  // ================== START OF MODIFICATION ==================
   Widget _buildBody(BuildContext context, AppVendor vendor) {
-    // Watch the BookingProvider to get booking stats
     final bookingProvider = context.watch<BookingProvider>();
     final bookings = bookingProvider.vendorBookings;
 
@@ -118,22 +104,27 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
           children: [
             _buildSectionTitle('Business Stats'),
             const SizedBox(height: 16),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 1.5,
+            // Changed from GridView to a Row for better layout with 3 items
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStatCard('Confirmed', confirmedCount.toString(),
-                    Icons.check_circle, Colors.green),
-                _buildStatCard('Pending', pendingCount.toString(),
-                    Icons.pending, Colors.orange),
-                _buildStatCard('Total Views', '1.2K', Icons.visibility,
-                    Colors.blue), // Dummy
-                _buildStatCard('Rating', vendor.rating.toStringAsFixed(1),
-                    Icons.star, Colors.amber),
+                Expanded(
+                    child: _buildStatCard(
+                        'Confirmed',
+                        confirmedCount.toString(),
+                        Icons.check_circle,
+                        Colors.green)),
+                const SizedBox(width: 16),
+                Expanded(
+                    child: _buildStatCard('Pending', pendingCount.toString(),
+                        Icons.pending, Colors.orange)),
+                const SizedBox(width: 16),
+                Expanded(
+                    child: _buildStatCard(
+                        'Rating',
+                        vendor.rating.toStringAsFixed(1),
+                        Icons.star,
+                        Colors.amber)),
               ],
             ),
             const SizedBox(height: 24),
@@ -162,8 +153,6 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
                               vendor.galleryUrls[index],
                               width: 120,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  const Icon(Icons.broken_image, size: 60),
                             ),
                           ),
                         );
@@ -182,12 +171,6 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
                 },
                 icon: const Icon(Icons.logout),
                 label: const Text('Logout'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red[50],
-                  foregroundColor: Colors.red[700],
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                ),
               ),
             ),
           ],
@@ -195,6 +178,7 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
       ),
     );
   }
+  // ================== END OF MODIFICATION ==================
 
   Widget _buildSectionTitle(String title) {
     return Padding(
@@ -218,7 +202,7 @@ class _VendorProfilePageState extends State<VendorProfilePage> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(icon, size: 28, color: color),
-            const Spacer(),
+            const SizedBox(height: 8),
             Text(
               value,
               style: TextStyle(
