@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -42,13 +43,12 @@ class VendorProvider extends ChangeNotifier {
     }
   }
 
-  // ================== START OF MODIFICATION ==================
   Future<String?> updateProfile({
     required String description,
     required double price,
     required String category,
     required List<File> newGalleryImages,
-    File? newProfileImage, // <-- ADDED: Optional new profile image
+    File? newProfileImage,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -61,29 +61,31 @@ class VendorProvider extends ChangeNotifier {
     }
 
     try {
-      // Create a mutable copy of the current vendor to update
-      AppVendor updatedVendor = _vendor!.copyWith();
+      String newProfileImageUrl =
+          _vendor!.imageUrl; // Start with the existing URL
+      List<String> newGalleryImageUrls = [];
 
-      // --- 1. Handle Profile Image Upload ---
+      // --- 1. Handle Profile Image Upload with Error Checking ---
       if (newProfileImage != null) {
-        final profileImageUrl = await _storageService.uploadVendorProfileImage(
+        final uploadedUrl = await _storageService.uploadVendorProfileImage(
           imageFile: newProfileImage,
           uid: user.uid,
         );
-        if (profileImageUrl != null) {
-          updatedVendor.imageUrl = profileImageUrl;
+        // If upload fails, stop the process and return an error.
+        if (uploadedUrl == null) {
+          return "Failed to upload profile image. Please check permissions or try again.";
         }
+        newProfileImageUrl = uploadedUrl;
       }
 
       // --- 2. Handle Gallery Images Upload ---
-      List<String> newImageUrls = [];
       for (var imageFile in newGalleryImages) {
-        final imageUrl = await _storageService.uploadVendorGalleryImage(
+        final uploadedUrl = await _storageService.uploadVendorGalleryImage(
           imageFile: imageFile,
           uid: user.uid,
         );
-        if (imageUrl != null) {
-          newImageUrls.add(imageUrl);
+        if (uploadedUrl != null) {
+          newGalleryImageUrls.add(uploadedUrl);
         }
       }
 
@@ -92,18 +94,22 @@ class VendorProvider extends ChangeNotifier {
         'description': description,
         'price': price,
         'category': category,
-        'galleryUrls': FieldValue.arrayUnion(newImageUrls),
-        'imageUrl': updatedVendor.imageUrl, // Ensure the new URL is included
+        'galleryUrls': FieldValue.arrayUnion(newGalleryImageUrls),
+        'imageUrl': newProfileImageUrl, // Use the potentially new URL
       };
 
       await _firestoreService.updateVendorProfile(user.uid, updatedData);
 
-      // --- 4. Update local state ---
-      _vendor = updatedVendor.copyWith(
+      // --- 4. Update local state correctly ---
+      _vendor = _vendor!.copyWith(
         description: description,
         price: price,
         category: category,
-        galleryUrls: [..._vendor!.galleryUrls, ...newImageUrls],
+        imageUrl: newProfileImageUrl, // Update the image URL in the local state
+        galleryUrls: [
+          ..._vendor!.galleryUrls,
+          ...newGalleryImageUrls
+        ], // Append new gallery URLs
       );
 
       return null; // Success
@@ -114,5 +120,4 @@ class VendorProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-  // ================== END OF MODIFICATION ==================
 }
