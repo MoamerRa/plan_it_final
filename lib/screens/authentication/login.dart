@@ -122,6 +122,74 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // Function to show the password reset dialog
+  Future<void> _showForgotPasswordDialog() async {
+    // Check if the current identifier is an email and use it as the initial value
+    final initialEmail = _identifierController.text.trim().contains('@')
+        ? _identifierController.text.trim()
+        : '';
+    final emailController = TextEditingController(text: initialEmail);
+
+    // This is safe because the dialog is built within the same context
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Reset Password'),
+          content: TextField(
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              hintText: 'Enter your email address',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final email = emailController.text.trim();
+                if (email.isEmpty) {
+                  // You can add an error inside the dialog if needed
+                  return;
+                }
+
+                // Capture context-dependent objects BEFORE the async gap.
+                final authProvider = context.read<AuthProvider>();
+                final navigator = Navigator.of(dialogContext);
+                final messenger = ScaffoldMessenger.of(context);
+
+                final result = await authProvider.resetPassword(email: email);
+
+                // Now it's safe to use the captured objects after the await.
+                if (!mounted) return;
+
+                navigator.pop();
+
+                if (result == null) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Password reset link sent to your email.'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  // _showError already has a mounted check, so this is safe.
+                  _showError(result);
+                }
+              },
+              child: const Text('Send Reset Link'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // The UI remains unchanged
@@ -179,7 +247,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: TextStyle(color: Colors.white, fontSize: 16),
                           ),
                         ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: _showForgotPasswordDialog,
+                    child: const Text('Forgot Password?'),
+                  ),
                   TextButton(
                     onPressed: () {
                       Navigator.pushNamed(context, '/signup');
